@@ -2,8 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import time
+
+from email import policy
+from email.parser import BytesParser
+from email.utils import parsedate_to_datetime
 
 # =========================
 # PAGE CONFIG & CONSTANTS
@@ -38,6 +42,70 @@ WORKFLOW_LABELS = {
     "Data Import Monitoring": "Data Import",
     "Subscriber Management": "Subscriber Management",
     "Quality Assurance": "Quality Assurance",
+}
+
+# default demo metrics (used if we cannot calculate from data)
+DEFAULT_WORKFLOW_METRICS = {
+    "Pending Trade Workflow": {
+        "pending": 71368,
+        "analysts": 24,
+        "time": "2.3 days",
+        "sla": "92%",
+    },
+    "Placements Processing": {
+        "pending": 2345,
+        "analysts": 8,
+        "time": "1.2 days",
+        "sla": "95%",
+    },
+    "UCC Filings": {
+        "pending": 1567,
+        "analysts": 6,
+        "time": "0.8 days",
+        "sla": "98%",
+    },
+    "Judgments Processing": {
+        "pending": 2890,
+        "analysts": 7,
+        "time": "1.5 days",
+        "sla": "94%",
+    },
+    "Chapter 11 Bankruptcy": {
+        "pending": 456,
+        "analysts": 3,
+        "time": "3.2 days",
+        "sla": "89%",
+    },
+    "Chapter 7 Bankruptcy": {
+        "pending": 321,
+        "analysts": 2,
+        "time": "2.8 days",
+        "sla": "91%",
+    },
+    "Credit Files Analysis": {
+        "pending": 1789,
+        "analysts": 5,
+        "time": "1.1 days",
+        "sla": "96%",
+    },
+    "Data Import Monitoring": {
+        "pending": 567,
+        "analysts": 4,
+        "time": "0.5 days",
+        "sla": "99%",
+    },
+    "Subscriber Management": {
+        "pending": 234,
+        "analysts": 3,
+        "time": "0.3 days",
+        "sla": "97%",
+    },
+    "Quality Assurance": {
+        "pending": 123,
+        "analysts": 2,
+        "time": "1.0 days",
+        "sla": "93%",
+    },
 }
 
 # =========================
@@ -99,6 +167,8 @@ if "show_new_task" not in st.session_state:
     st.session_state.show_new_task = False
 if "active_filter" not in st.session_state:
     st.session_state.active_filter = None
+if "date_filter" not in st.session_state:
+    st.session_state.date_filter = None
 
 # =========================
 # HEADER
@@ -129,15 +199,18 @@ with st.sidebar:
         for uploaded_file in uploaded_files:
             try:
                 if uploaded_file.name.endswith(".csv"):
-                    df = pd.read_csv(uploaded_file)
+                    df_up = pd.read_csv(uploaded_file)
                 else:
-                    df = pd.read_excel(uploaded_file)
+                    df_up = pd.read_excel(uploaded_file)
+
+                # simple cleanup: strip col names
+                df_up.columns = [c.strip() for c in df_up.columns]
 
                 if st.session_state.historical_data.empty:
-                    st.session_state.historical_data = df
+                    st.session_state.historical_data = df_up
                 else:
                     st.session_state.historical_data = pd.concat(
-                        [st.session_state.historical_data, df], ignore_index=True
+                        [st.session_state.historical_data, df_up], ignore_index=True
                     )
 
                 st.success(f"✅ {uploaded_file.name} loaded successfully!")
@@ -160,7 +233,7 @@ with st.sidebar:
         st.session_state.show_new_task = True
         st.rerun()
 
-    # ----- Global filters (Power BI style) -----
+    # ----- Global filters (slicer + date) -----
     st.markdown("---")
     st.subheader("Global Filters")
 
@@ -173,6 +246,7 @@ with st.sidebar:
             combined_df = pd.concat([combined_df, task_history_df], ignore_index=True)
 
     if not combined_df.empty:
+        # generic column filter
         filter_col = st.selectbox(
             "Filter column",
             options=combined_df.columns.tolist(),
@@ -192,8 +266,152 @@ with st.sidebar:
             "column": filter_col,
             "values": selected_vals,
         }
+
+        # date filter
+        st.markdown("**Date filter**")
+
+        df_for_dates = combined_df.copy()
+        # detect date-typed columns
+        date_columns = df_for_dates.select_dtypes(
+            include=["datetime64[ns]", "datetime64[ns, UTC]"]
+        ).columns.tolist()
+
+        # also try columns with "date" in name
+        if not date_columns:
+            candidate_cols = [c for c in df_for_dates.columns if "date" in c.lower()]
+            for c in candidate_cols:
+                try:
+                    df_for_dates[c] = pd.to_datetime(df_for_dates[c])
+                    date_columns.append(c)
+                except Exception:
+                    pass
+
+        if date_columns:
+            date_col = st.selectbox("Date column", date_columns, key="date_col_select")
+
+            min_d = df_for_dates[date_col].min()
+            max_d = df_for_dates[date_col].max()
+
+            if pd.isna(min_d) or pd.isna(max_d):
+                st.caption("No valid dates found to build a range.")
+                st.session_state.date_filter = None
+            else:
+                start_default = min_d.date()
+                end_default = max_d.date()
+                start_date, end_date = st.date_input(
+                    "Date range",
+                    [start_default, end_default],
+                )
+                if isinstance(start_date, date) and isinstance(end_date, date):
+                    st.session_state.date_filter = {
+                        "column": date_col,
+                        "start": datetime.combine(start_date, datetime.min.time()),
+                        "end": datetime.combine(end_date, datetime.max.time()),
+                    }
+        else:
+            st.caption("No date-like columns detected for date filter.")
+            st.session_state.date_filter = None
     else:
         st.caption("Upload data or complete tasks to enable global filters.")
+        st.session_state.active_filter = None
+        st.session_state.date_filter = None
+
+# =========================
+# HELPER: APPLY FILTERS
+# =========================
+
+def apply_global_filters(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply active_filter and date_filter from session_state to a dataframe."""
+    if df is None or df.empty:
+        return df
+
+    result = df.copy()
+
+    # generic filter
+    af = st.session_state.get("active_filter")
+    if af and af.get("column") in result.columns:
+        try:
+            result = result[result[af["column"]].astype(str).isin(af["values"])]
+        except Exception:
+            pass
+
+    # date filter
+    df_filter = st.session_state.get("date_filter")
+    if df_filter and df_filter.get("column") in result.columns:
+        try:
+            col = df_filter["column"]
+            result[col] = pd.to_datetime(result[col], errors="coerce")
+            mask = (result[col] >= df_filter["start"]) & (
+                result[col] <= df_filter["end"]
+            )
+            result = result[mask]
+        except Exception:
+            pass
+
+    return result
+
+
+def get_workflow_metrics(selected_key: str) -> dict:
+    """
+    Try to compute dynamic 'pending' counts from historical_data using a workflow-like column.
+    Fallback to DEFAULT_WORKFLOW_METRICS.
+    """
+    base = DEFAULT_WORKFLOW_METRICS.get(selected_key, DEFAULT_WORKFLOW_METRICS["Pending Trade Workflow"]).copy()
+
+    df = st.session_state.historical_data
+    if df is None or df.empty:
+        return base
+
+    df = df.copy()
+    df.columns = [c.strip() for c in df.columns]
+
+    # guess workflow column
+    workflow_col = None
+    for c in df.columns:
+        low = c.lower()
+        if "workflow" in low or "process" in low or "chapter" in low or "work_type" in low:
+            workflow_col = c
+            break
+
+    if not workflow_col:
+        return base
+
+    try:
+        df[workflow_col] = df[workflow_col].astype(str)
+    except Exception:
+        return base
+
+    # try to match selected workflow using label keywords
+    label = WORKFLOW_LABELS.get(selected_key, selected_key)
+    keywords = [
+        "Pending Trades",
+        "Placements",
+        "UCC",
+        "Judgments",
+        "Chapter 11",
+        "Chapter 7",
+        "Credit Files",
+        "Data Import",
+        "Subscriber",
+        "Quality Assurance",
+    ]
+
+    target = label
+    # very simple: count rows where workflow column contains label bits
+    mask = df[workflow_col].str.contains(label, case=False, na=False)
+    if not mask.any():
+        # for Chapter 11 etc, just search by chapter
+        if "Chapter 11" in label:
+            mask = df[workflow_col].str.contains("11", case=False, na=False)
+        elif "Chapter 7" in label:
+            mask = df[workflow_col].str.contains("7", case=False, na=False)
+
+    count = int(mask.sum())
+    if count > 0:
+        base["pending"] = count
+
+    return base
+
 
 # =========================
 # TABS
@@ -220,72 +438,7 @@ with tab1:
         unsafe_allow_html=True,
     )
 
-    workflow_metrics = {
-        "Pending Trade Workflow": {
-            "pending": 71368,
-            "analysts": 24,
-            "time": "2.3 days",
-            "sla": "92%",
-        },
-        "Placements Processing": {
-            "pending": 2345,
-            "analysts": 8,
-            "time": "1.2 days",
-            "sla": "95%",
-        },
-        "UCC Filings": {
-            "pending": 1567,
-            "analysts": 6,
-            "time": "0.8 days",
-            "sla": "98%",
-        },
-        "Judgments Processing": {
-            "pending": 2890,
-            "analysts": 7,
-            "time": "1.5 days",
-            "sla": "94%",
-        },
-        "Chapter 11 Bankruptcy": {
-            "pending": 456,
-            "analysts": 3,
-            "time": "3.2 days",
-            "sla": "89%",
-        },
-        "Chapter 7 Bankruptcy": {
-            "pending": 321,
-            "analysts": 2,
-            "time": "2.8 days",
-            "sla": "91%",
-        },
-        "Credit Files Analysis": {
-            "pending": 1789,
-            "analysts": 5,
-            "time": "1.1 days",
-            "sla": "96%",
-        },
-        "Data Import Monitoring": {
-            "pending": 567,
-            "analysts": 4,
-            "time": "0.5 days",
-            "sla": "99%",
-        },
-        "Subscriber Management": {
-            "pending": 234,
-            "analysts": 3,
-            "time": "0.3 days",
-            "sla": "97%",
-        },
-        "Quality Assurance": {
-            "pending": 123,
-            "analysts": 2,
-            "time": "1.0 days",
-            "sla": "93%",
-        },
-    }
-
-    current_metrics = workflow_metrics.get(
-        selected_workflow, workflow_metrics["Pending Trade Workflow"]
-    )
+    current_metrics = get_workflow_metrics(selected_workflow)
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -315,7 +468,6 @@ with tab1:
             "Quality Assurance",
         ],
         "Pending_Items": [71368, 2345, 1567, 2890, 456, 321, 1789, 567, 234, 123],
-        "Active_Tasks": [45, 12, 8, 15, 6, 4, 10, 7, 5, 3],
     }
     workflow_df = pd.DataFrame(workflow_data)
     st.bar_chart(workflow_df.set_index("Workflow")["Pending_Items"])
@@ -357,11 +509,7 @@ with tab2:
     )
 
     if not st.session_state.historical_data.empty:
-        df = st.session_state.historical_data.copy()
-
-        af = st.session_state.get("active_filter")
-        if af and af["column"] in df.columns:
-            df = df[df[af["column"]].astype(str).isin(af["values"])]
+        df = apply_global_filters(st.session_state.historical_data)
 
         st.subheader("Historical Data Overview (Filtered)")
         st.dataframe(df, use_container_width=True)
@@ -373,11 +521,11 @@ with tab2:
         with c2:
             st.metric("Columns", len(df.columns))
         with c3:
-            date_cols = df.select_dtypes(include=["datetime64"])
+            date_cols = df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"])
             if not date_cols.empty:
-                st.metric("Data Period Start", str(date_cols.min().iloc[0]))
+                st.metric("Earliest Date", str(date_cols.min().min().date()))
             else:
-                st.metric("Data Period Start", "N/A")
+                st.metric("Earliest Date", "N/A")
 
 # =========================
 # TAB 3 – EMAIL IMPORT
@@ -393,100 +541,156 @@ with tab3:
 
     email_files = st.file_uploader(
         "Upload email files or work request spreadsheets:",
-        type=["xlsx", "xls", "csv"],
+        type=["xlsx", "xls", "csv", "eml"],
         accept_multiple_files=True,
-        help="Upload multiple email files or Excel sheets containing work requests",
+        help="Upload .eml or Excel/CSV containing work requests",
         key="email_uploader",
     )
 
-    if email_files:
-        st.success(f"✅ {len(email_files)} email file(s) uploaded successfully!")
+    email_data = []
 
-        email_data = []
+    if email_files:
+        st.success(f"✅ {len(email_files)} file(s) uploaded successfully!")
+
         for email_file in email_files:
             try:
-                if email_file.name.endswith(".csv"):
-                    df = pd.read_csv(email_file)
-                else:
-                    df = pd.read_excel(email_file)
+                name = email_file.name.lower()
 
-                for _, row in df.iterrows():
+                # --- Raw .eml email files ---
+                if name.endswith(".eml"):
+                    raw_bytes = email_file.read()
+                    msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+
+                    subject = msg["subject"] or "No subject"
+                    requestor = msg["from"] or "Unknown"
+
+                    try:
+                        received_dt = (
+                            parsedate_to_datetime(msg["date"])
+                            if msg["date"]
+                            else datetime.now()
+                        )
+                    except Exception:
+                        received_dt = datetime.now()
+
+                    # Extract plain text body
+                    body = ""
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            ctype = part.get_content_type()
+                            disp = str(part.get("Content-Disposition"))
+                            if ctype == "text/plain" and "attachment" not in disp:
+                                try:
+                                    body += part.get_content()
+                                except Exception:
+                                    pass
+                    else:
+                        try:
+                            body = msg.get_content()
+                        except Exception:
+                            body = ""
+
+                    attachments = []
+                    for att in msg.iter_attachments():
+                        fname = att.get_filename()
+                        if fname:
+                            attachments.append(fname)
+
                     email_data.append(
                         {
                             "email_file": email_file.name,
                             "work_item_id": f"EMAIL_{len(email_data)+1:04d}",
-                            "subject": row.get("subject", "N/A"),
-                            "requestor": row.get("from", "Unknown"),
-                            "received_date": row.get(
-                                "date", datetime.now().strftime("%Y-%m-%d")
-                            ),
-                            "priority": row.get("priority", "Medium"),
-                            "estimated_effort_minutes": row.get(
-                                "estimated_effort", 30
-                            ),
+                            "subject": subject,
+                            "requestor": requestor,
+                            "received_date": received_dt,
+                            "priority": "Medium",
+                            "estimated_effort_minutes": 30,
                             "assigned_to": "Unassigned",
                             "status": "New",
+                            "body_preview": body[:500],
+                            "attachments": ", ".join(attachments),
                         }
                     )
+
+                # --- Excel / CSV work request sheets ---
+                elif name.endswith(".csv"):
+                    df_sheet = pd.read_csv(email_file)
+                else:
+                    df_sheet = pd.read_excel(email_file)
+
+                if not name.endswith(".eml"):
+                    df_sheet.columns = [c.strip() for c in df_sheet.columns]
+                    for _, row in df_sheet.iterrows():
+                        email_data.append(
+                            {
+                                "email_file": email_file.name,
+                                "work_item_id": f"EMAIL_{len(email_data)+1:04d}",
+                                "subject": row.get("subject", "N/A"),
+                                "requestor": row.get("from", "Unknown"),
+                                "received_date": row.get(
+                                    "date", datetime.now().strftime("%Y-%m-%d")
+                                ),
+                                "priority": row.get("priority", "Medium"),
+                                "estimated_effort_minutes": row.get(
+                                    "estimated_effort", 30
+                                ),
+                                "assigned_to": "Unassigned",
+                                "status": "New",
+                                "body_preview": str(row.get("body", ""))[:500],
+                                "attachments": str(row.get("attachments", "")),
+                            }
+                        )
+
             except Exception as e:
                 st.error(f"Error processing {email_file.name}: {str(e)}")
 
-        if email_data:
-            email_df = pd.DataFrame(email_data)
-            st.subheader("Extracted Work Items from Emails")
-            st.dataframe(email_df, use_container_width=True)
+    if email_data:
+        email_df = pd.DataFrame(email_data)
+        st.subheader("Extracted Work Items")
+        st.dataframe(email_df, use_container_width=True)
 
-            st.subheader("Assign Work Items & Create Tasks")
+        st.subheader("Assign Work Items & Create Tasks")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                selected_items = st.multiselect(
-                    "Select work items to assign:",
-                    options=email_df["work_item_id"].tolist(),
+        c1, c2 = st.columns(2)
+        with c1:
+            selected_items = st.multiselect(
+                "Select work items to assign:",
+                options=email_df["work_item_id"].tolist(),
+            )
+        with c2:
+            assigned_analyst = st.selectbox(
+                "Assign to Analyst:",
+                options=TEAM_MEMBERS,
+            )
+            workflow_type = st.selectbox(
+                "Workflow Type:",
+                list(WORKFLOW_LABELS.keys()),
+                format_func=lambda x: WORKFLOW_LABELS.get(x, x),
+            )
+
+            if st.button("Create Tasks from Selected Items", type="primary"):
+                for item_id in selected_items:
+                    row = email_df[email_df["work_item_id"] == item_id].iloc[0]
+                    task_id = f"TASK_{len(st.session_state.active_tasks) + 1:04d}"
+
+                    st.session_state.active_tasks[task_id] = {
+                        "task_name": f"Email: {row['subject']}",
+                        "workflow": workflow_type,
+                        "assigned_analyst": assigned_analyst,
+                        "description": f"From: {row['requestor']} - {row['subject']}\n\n{row.get('body_preview', '')}",
+                        "estimated_duration": row["estimated_effort_minutes"],
+                        "priority": row["priority"],
+                        "start_time": datetime.now(),
+                        "status": "Active",
+                        "paused_time": None,
+                        "total_paused_duration": 0,
+                        "source": "Email Import",
+                    }
+
+                st.success(
+                    f"✅ {len(selected_items)} tasks created and assigned to {assigned_analyst}"
                 )
-            with c2:
-                assigned_analyst = st.selectbox(
-                    "Assign to Analyst:",
-                    options=TEAM_MEMBERS,
-                )
-                workflow_type = st.selectbox(
-                    "Workflow Type:",
-                    list(WORKFLOW_LABELS.keys()),
-                    format_func=lambda x: WORKFLOW_LABELS.get(x, x),
-                )
-
-                if st.button("Create Tasks from Selected Items", type="primary"):
-                    for item_id in selected_items:
-                        email_df.loc[
-                            email_df["work_item_id"] == item_id, "assigned_to"
-                        ] = assigned_analyst
-                        email_df.loc[
-                            email_df["work_item_id"] == item_id, "status"
-                        ] = "Assigned"
-
-                        task_id = f"TASK_{len(st.session_state.active_tasks) + 1:04d}"
-                        item_data = email_df[email_df["work_item_id"] == item_id].iloc[0]
-
-                        st.session_state.active_tasks[task_id] = {
-                            "task_name": f"Email: {item_data['subject']}",
-                            "workflow": workflow_type,
-                            "assigned_analyst": assigned_analyst,
-                            "description": f"From: {item_data['requestor']} - {item_data['subject']}",
-                            "estimated_duration": item_data[
-                                "estimated_effort_minutes"
-                            ],
-                            "priority": item_data["priority"],
-                            "start_time": datetime.now(),
-                            "status": "Active",
-                            "paused_time": None,
-                            "total_paused_duration": 0,
-                            "source": "Email Import",
-                        }
-
-                    st.success(
-                        f"✅ {len(selected_items)} tasks created and assigned to {assigned_analyst}"
-                    )
-                    st.rerun()
+                st.rerun()
 
 # =========================
 # TAB 4 – TASK MANAGEMENT
@@ -626,7 +830,7 @@ with tab4:
                 st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info(
-            "No active tasks. Click 'Start New Task' in the sidebar to begin tracking work."
+            "No active tasks. Use 'Start New Task' (sidebar) or create from Email Import."
         )
 
     if st.session_state.task_history:
@@ -653,11 +857,7 @@ with tab5:
             all_data = task_history_df
 
     if not all_data.empty:
-        af = st.session_state.get("active_filter")
-        if af and af["column"] in all_data.columns:
-            all_data = all_data[
-                all_data[af["column"]].astype(str).isin(af["values"])
-            ]
+        all_data = apply_global_filters(all_data)
 
         st.subheader("Combined Historical & Current Data (Filtered)")
         st.dataframe(all_data, use_container_width=True)
@@ -820,6 +1020,8 @@ with ec3:
             output = io.BytesIO()
 
             if export_format == "Excel":
+                from pandas import ExcelWriter
+
                 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                     if "Task History" in include_sections and st.session_state.task_history:
                         pd.DataFrame(st.session_state.task_history).to_excel(
@@ -899,7 +1101,7 @@ with ec3:
 
 st.markdown("---")
 st.markdown(
-    "ARMS Workflow Management System v4.2 | GitHub & Streamlit Ready | For internal use only"
+    "ARMS Workflow Management System v4.3 | GitHub & Streamlit Ready | For internal use only"
 )
 
 with st.expander("🚀 Deployment Notes"):
@@ -909,16 +1111,10 @@ Deployment checklist:
 
 1. Save this file as `arms_workflow.py` in your GitHub repo.
 2. Create `requirements.txt` with at least:
-   - streamlit
-   - pandas
-   - numpy
-   - openpyxl
-   - xlsxwriter
-3. Push code to GitHub.
-4. On Streamlit Community Cloud:
-   - New app → select this repo
-   - Branch: `main`
-   - App file: `arms_workflow.py`
-5. Share the generated URL with your team.
-"""
+   streamlit
+   pandas
+   numpy
+   openpyxl
+   xlsxwriter
+   """
     )
