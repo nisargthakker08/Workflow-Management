@@ -6,20 +6,25 @@ from datetime import datetime, timedelta
 import time
 
 # =========================
-# Config & Constants
+# PAGE CONFIG & CONSTANTS
 # =========================
 
 st.set_page_config(
     page_title="ARMS Workflow Management System",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 TEAM_MEMBERS = [
-    "Jen Shears", "Rondrea Carroll", "Devanshi Joshi",
-    "Komal Khamar", "Divyesh Fofandi", "Parth Chelani",
-    "Prerna Kesrani", "Nisarg Thakker"
+    "Jen Shears",
+    "Rondrea Carroll",
+    "Devanshi Joshi",
+    "Komal Khamar",
+    "Divyesh Fofandi",
+    "Parth Chelani",
+    "Prerna Kesrani",
+    "Nisarg Thakker",
 ]
 
 WORKFLOW_LABELS = {
@@ -36,7 +41,7 @@ WORKFLOW_LABELS = {
 }
 
 # =========================
-# Custom CSS
+# CUSTOM CSS
 # =========================
 
 st.markdown(
@@ -47,12 +52,6 @@ st.markdown(
         color: #1f77b4;
         text-align: center;
         margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #1f77b4;
     }
     .section-header {
         color: #1f77b4;
@@ -83,7 +82,7 @@ st.markdown(
 )
 
 # =========================
-# Session State Init
+# SESSION STATE INIT
 # =========================
 
 if "active_tasks" not in st.session_state:
@@ -102,7 +101,7 @@ if "active_filter" not in st.session_state:
     st.session_state.active_filter = None
 
 # =========================
-# Header
+# HEADER
 # =========================
 
 st.markdown(
@@ -117,7 +116,7 @@ st.markdown(
 with st.sidebar:
     st.header("ARMS Navigation")
 
-    # -------- Data Import --------
+    # ----- Data Import -----
     st.subheader("📁 Data Import")
     uploaded_files = st.file_uploader(
         "Upload Excel/CSV Files:",
@@ -138,15 +137,14 @@ with st.sidebar:
                     st.session_state.historical_data = df
                 else:
                     st.session_state.historical_data = pd.concat(
-                        [st.session_state.historical_data, df],
-                        ignore_index=True,
+                        [st.session_state.historical_data, df], ignore_index=True
                     )
 
                 st.success(f"✅ {uploaded_file.name} loaded successfully!")
             except Exception as e:
                 st.error(f"Error processing {uploaded_file.name}: {str(e)}")
 
-    # -------- Workflow Selection --------
+    # ----- Workflow selection -----
     st.markdown("---")
     st.subheader("Workflow Management")
     selected_workflow = st.selectbox(
@@ -155,20 +153,18 @@ with st.sidebar:
         format_func=lambda x: WORKFLOW_LABELS.get(x, x),
     )
 
-    # -------- Task Controls --------
+    # ----- Task controls -----
     st.markdown("---")
     st.subheader("Task Controls")
-
     if st.button("🎯 Start New Task", use_container_width=True):
         st.session_state.show_new_task = True
         st.rerun()
 
-    # -------- Global Filters (Power BI-style) --------
+    # ----- Global filters (Power BI style) -----
     st.markdown("---")
     st.subheader("Global Filters")
 
     combined_df = st.session_state.historical_data.copy()
-
     if st.session_state.task_history:
         task_history_df = pd.DataFrame(st.session_state.task_history)
         if combined_df.empty:
@@ -183,17 +179,13 @@ with st.sidebar:
         )
 
         unique_vals = (
-            combined_df[filter_col]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
+            combined_df[filter_col].dropna().astype(str).unique().tolist()
         )
 
         selected_vals = st.multiselect(
             "Filter values",
             options=unique_vals,
-            default=unique_vals,  # like having all values selected in a slicer
+            default=unique_vals,
         )
 
         st.session_state.active_filter = {
@@ -204,7 +196,7 @@ with st.sidebar:
         st.caption("Upload data or complete tasks to enable global filters.")
 
 # =========================
-# MAIN TABS
+# TABS
 # =========================
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
@@ -295,17 +287,19 @@ with tab1:
         selected_workflow, workflow_metrics["Pending Trade Workflow"]
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
         st.metric("Total Pending Items", f"{current_metrics['pending']:,}")
-    with col2:
+    with c2:
         st.metric("Active Analysts", current_metrics["analysts"])
-    with col3:
+    with c3:
         st.metric("Avg Processing Time", current_metrics["time"])
-    with col4:
+    with c4:
         st.metric("SLA Compliance", current_metrics["sla"])
 
-    st.subheader(f"{WORKFLOW_LABELS.get(selected_workflow, selected_workflow)} - Distribution")
+    st.subheader(
+        f"{WORKFLOW_LABELS.get(selected_workflow, selected_workflow)} - Distribution"
+    )
 
     workflow_data = {
         "Workflow": [
@@ -323,12 +317,8 @@ with tab1:
         "Pending_Items": [71368, 2345, 1567, 2890, 456, 321, 1789, 567, 234, 123],
         "Active_Tasks": [45, 12, 8, 15, 6, 4, 10, 7, 5, 3],
     }
-
     workflow_df = pd.DataFrame(workflow_data)
-
-    # simple overview chart
-    chart_data = workflow_df.set_index("Workflow")["Pending_Items"]
-    st.bar_chart(chart_data)
+    st.bar_chart(workflow_df.set_index("Workflow")["Pending_Items"])
 
 # =========================
 # TAB 2 – PENDING WORKFLOW
@@ -359,7 +349,7 @@ with tab2:
         "Table 14": "Chapter 7 - Analyst Assignment",
     }
 
-    selected_tables = st.multiselect(
+    st.multiselect(
         "Select tables to analyze:",
         list(tables_info.keys()),
         default=["Table 1", "Table 2", "Table 3", "Table 4"],
@@ -369,7 +359,6 @@ with tab2:
     if not st.session_state.historical_data.empty:
         df = st.session_state.historical_data.copy()
 
-        # Apply global filter
         af = st.session_state.get("active_filter")
         if af and af["column"] in df.columns:
             df = df[df[af["column"]].astype(str).isin(af["values"])]
@@ -378,12 +367,12 @@ with tab2:
         st.dataframe(df, use_container_width=True)
 
         st.subheader("Data Summary")
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        c1, c2, c3 = st.columns(3)
+        with c1:
             st.metric("Total Records", len(df))
-        with col2:
+        with c2:
             st.metric("Columns", len(df.columns))
-        with col3:
+        with c3:
             date_cols = df.select_dtypes(include=["datetime64"])
             if not date_cols.empty:
                 st.metric("Data Period Start", str(date_cols.min().iloc[0]))
@@ -449,19 +438,17 @@ with tab3:
 
             st.subheader("Assign Work Items & Create Tasks")
 
-            col1, col2 = st.columns(2)
-            with col1:
+            c1, c2 = st.columns(2)
+            with c1:
                 selected_items = st.multiselect(
                     "Select work items to assign:",
                     options=email_df["work_item_id"].tolist(),
                 )
-
-            with col2:
+            with c2:
                 assigned_analyst = st.selectbox(
                     "Assign to Analyst:",
                     options=TEAM_MEMBERS,
                 )
-
                 workflow_type = st.selectbox(
                     "Workflow Type:",
                     list(WORKFLOW_LABELS.keys()),
@@ -518,10 +505,11 @@ with tab4:
         with st.form("new_task_form"):
             st.subheader("Create New Task")
 
-            col1, col2 = st.columns(2)
-            with col1:
+            c1, c2 = st.columns(2)
+            with c1:
                 task_name = st.text_input(
-                    "Task Name:", placeholder="Enter task name"
+                    "Task Name:",
+                    placeholder="Enter task name",
                 )
                 task_workflow = st.selectbox(
                     "Workflow Type:",
@@ -529,24 +517,28 @@ with tab4:
                     format_func=lambda x: WORKFLOW_LABELS.get(x, x),
                 )
                 assigned_analyst = st.selectbox(
-                    "Assign to Analyst:", TEAM_MEMBERS
+                    "Assign to Analyst:",
+                    TEAM_MEMBERS,
                 )
-
-            with col2:
+            with c2:
                 task_description = st.text_area(
-                    "Task Description:", placeholder="Describe the task..."
+                    "Task Description:",
+                    placeholder="Describe the task...",
                 )
                 estimated_duration = st.number_input(
-                    "Estimated Duration (minutes):", min_value=5, value=30
+                    "Estimated Duration (minutes):",
+                    min_value=5,
+                    value=30,
                 )
                 priority = st.selectbox(
-                    "Priority:", ["Low", "Medium", "High", "Critical"]
+                    "Priority:",
+                    ["Low", "Medium", "High", "Critical"],
                 )
 
-            c1, c2 = st.columns(2)
-            with c1:
+            cc1, cc2 = st.columns(2)
+            with cc1:
                 submitted = st.form_submit_button("🎯 Start Task")
-            with c2:
+            with cc2:
                 cancel = st.form_submit_button("❌ Cancel")
 
             if submitted and task_name:
@@ -571,7 +563,6 @@ with tab4:
                 st.session_state.show_new_task = False
                 st.rerun()
 
-    # Active tasks list
     if st.session_state.active_tasks:
         st.subheader("Currently Active Tasks")
 
@@ -582,9 +573,9 @@ with tab4:
                 st.markdown(
                     f'<div class="workflow-card {task_class}">', unsafe_allow_html=True
                 )
+                c1, c2, c3 = st.columns([3, 2, 1])
 
-                col1, col2, col3 = st.columns([3, 2, 1])
-                with col1:
+                with c1:
                     st.markdown(f"**{task['task_name']}**")
                     st.write(
                         f"Workflow: {WORKFLOW_LABELS.get(task['workflow'], task['workflow'])} | Analyst: {task['assigned_analyst']}"
@@ -595,14 +586,14 @@ with tab4:
                     if task.get("source"):
                         st.write(f"Source: {task['source']}")
 
-                with col2:
+                with c2:
                     current_duration = (
                         datetime.now() - task["start_time"]
                     ).total_seconds() / 60
                     st.write(f"Duration: {current_duration:.1f} min")
                     st.write(f"Status: {task['status']}")
 
-                with col3:
+                with c3:
                     if task["status"] == "Active":
                         if st.button("⏸️ Pause", key=f"pause_{task_id}"):
                             st.session_state.active_tasks[task_id]["status"] = "Paused"
@@ -610,7 +601,6 @@ with tab4:
                                 "paused_time"
                             ] = datetime.now()
                             st.rerun()
-
                         if st.button("✅ Complete", key=f"complete_{task_id}"):
                             task_data = st.session_state.active_tasks[task_id].copy()
                             task_data["end_time"] = datetime.now()
@@ -620,7 +610,6 @@ with tab4:
                             st.session_state.task_history.append(task_data)
                             del st.session_state.active_tasks[task_id]
                             st.rerun()
-
                     elif task["status"] == "Paused":
                         if st.button("▶️ Resume", key=f"resume_{task_id}"):
                             paused_duration = (
@@ -640,7 +629,6 @@ with tab4:
             "No active tasks. Click 'Start New Task' in the sidebar to begin tracking work."
         )
 
-    # Task history
     if st.session_state.task_history:
         st.subheader("Task History")
         history_df = pd.DataFrame(st.session_state.task_history)
@@ -675,17 +663,19 @@ with tab5:
         st.dataframe(all_data, use_container_width=True)
 
         st.subheader("Performance Analytics")
+        c1, c2, c3 = st.columns(3)
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        with c1:
             if "total_duration" in all_data.columns:
                 avg_duration = all_data["total_duration"].mean()
                 st.metric("Average Task Duration", f"{avg_duration:.1f} min")
-        with col2:
+
+        with c2:
             if "priority" in all_data.columns:
                 high_priority = len(all_data[all_data["priority"] == "High"])
                 st.metric("High Priority Tasks", high_priority)
-        with col3:
+
+        with c3:
             if "workflow" in all_data.columns:
                 unique_workflows = all_data["workflow"].nunique()
                 st.metric("Active Workflows", unique_workflows)
@@ -734,7 +724,6 @@ with tab5:
             "-0.3",
         ],
     }
-
     dept_metrics_df = pd.DataFrame(dept_metrics_data)
     st.dataframe(dept_metrics_df, use_container_width=True)
 
@@ -751,8 +740,8 @@ with tab6:
     st.subheader("Define New Workflow")
 
     with st.form("workflow_definition"):
-        col1, col2 = st.columns(2)
-        with col1:
+        c1, c2 = st.columns(2)
+        with c1:
             workflow_name = st.text_input("Workflow Name:")
             sla_target = st.number_input(
                 "SLA Target (%):", min_value=0, max_value=100, value=95
@@ -760,13 +749,14 @@ with tab6:
             max_processing_time = st.number_input(
                 "Max Processing Time (hours):", min_value=1, value=24
             )
-        with col2:
+        with c2:
             assigned_team = st.text_input("Assigned Team:")
             required_approvals = st.number_input(
                 "Required Approvals:", min_value=0, value=1
             )
             priority_level = st.selectbox(
-                "Default Priority:", ["Low", "Medium", "High", "Critical"]
+                "Default Priority:",
+                ["Low", "Medium", "High", "Critical"],
             )
 
         data_points = st.text_area(
@@ -808,10 +798,10 @@ with tab6:
 st.markdown("---")
 st.subheader("📤 Export Data & Reports")
 
-col1, col2, col3 = st.columns(3)
-with col1:
+ec1, ec2, ec3 = st.columns(3)
+with ec1:
     export_format = st.radio("Export Format:", ["Excel", "CSV"])
-with col2:
+with ec2:
     include_sections = st.multiselect(
         "Include Sections:",
         [
@@ -819,17 +809,14 @@ with col2:
             "Active Tasks",
             "Workflow Definitions",
             "Historical Data",
-            "Performance Metrics",
         ],
         default=["Task History", "Active Tasks"],
     )
-
-with col3:
+with ec3:
     st.write("")
     if st.button("Generate Comprehensive Report", type="primary"):
         with st.spinner("Generating export file..."):
             time.sleep(2)
-
             output = io.BytesIO()
 
             if export_format == "Excel":
@@ -841,7 +828,9 @@ with col3:
                     if "Active Tasks" in include_sections and st.session_state.active_tasks:
                         pd.DataFrame.from_dict(
                             st.session_state.active_tasks, orient="index"
-                        ).to_excel(writer, sheet_name="Active_Tasks", index=False)
+                        ).to_excel(
+                            writer, sheet_name="Active_Tasks", index=False
+                        )
                     if (
                         "Workflow Definitions" in include_sections
                         and st.session_state.workflow_definitions
@@ -860,9 +849,7 @@ with col3:
                         )
                 mime_type = "application/vnd.ms-excel"
                 file_name = f"ARMS_Export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-
-            else:  # CSV export = zip style single sheet with concatenated data
-                # For simplicity, export task history only when CSV is selected
+            else:
                 csv_df_list = []
                 if "Task History" in include_sections and st.session_state.task_history:
                     csv_df_list.append(
@@ -899,7 +886,6 @@ with col3:
                 file_name = f"ARMS_Export_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
 
             st.success("Export generated successfully!")
-
             st.download_button(
                 label="Download Export File",
                 data=output.getvalue(),
@@ -919,14 +905,20 @@ st.markdown(
 with st.expander("🚀 Deployment Notes"):
     st.markdown(
         """
-**Deployment checklist**
+Deployment checklist:
 
-1. Place this file in your repo as `arms_workflow.py`
-2. Add `requirements.txt` with at least:
-
-```txt
-streamlit
-pandas
-numpy
-openpyxl
-xlsxwriter
+1. Save this file as `arms_workflow.py` in your GitHub repo.
+2. Create `requirements.txt` with at least:
+   - streamlit
+   - pandas
+   - numpy
+   - openpyxl
+   - xlsxwriter
+3. Push code to GitHub.
+4. On Streamlit Community Cloud:
+   - New app → select this repo
+   - Branch: `main`
+   - App file: `arms_workflow.py`
+5. Share the generated URL with your team.
+"""
+    )
