@@ -1,719 +1,491 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import datetime
-from datetime import date, timedelta
-import io
-import base64
+import datetime as dt
 
-# ======================================
-# ENTERPRISE CONFIGURATION
-# ======================================
+# =========================
+# CONFIG
+# =========================
 
 st.set_page_config(
-    page_title="ARMS Enterprise Analytics",
+    page_title="ARMS Workflow Manager",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Professional Enterprise Styling
+ANALYSTS = [
+    "Nisarg Thakker",
+    "Jen Shears",
+    "Komal Khamar",
+    "Janet Yanatos",
+    "Rondrea Carroll",
+    "Devanshi Joshi",
+    "Divyesh Fofandi",
+    "Parth Chelani",
+    "Prerna Kesrani",
+    "Ayushi Chandel",
+    "Ankit Rawat",
+]
+
+# =========================
+# STYLING
+# =========================
+
 st.markdown("""
 <style>
-    /* Main Theme */
-    .main {
-        background-color: #0e1a2b;
-    }
-    
-    /* Enterprise Header */
-    .enterprise-header {
-        background: linear-gradient(135deg, #0f2d4e 0%, #1a4b8c 100%);
+    .main { background-color: #0e1a2b; }
+    .top-header {
+        background: linear-gradient(135deg,#0f2d4e,#1a4b8c);
+        padding: 1.2rem 2rem;
         color: white;
-        padding: 1.5rem 2rem;
-        border-radius: 0px;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         border-bottom: 3px solid #00d4ff;
+        margin-bottom: 0.5rem;
     }
-    
-    /* Power BI-like Cards */
-    .powerbi-card {
+    .metric-card {
         background: #1e2a3b;
-        padding: 1.5rem;
+        padding: 1rem 1.2rem;
         border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         border: 1px solid #2a3a50;
-        margin-bottom: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
-    
-    /* Metric Cards */
-    .metric-card-enterprise {
-        background: linear-gradient(135deg, #1a4b8c 0%, #2a5ca0 100%);
-        padding: 1.2rem;
-        border-radius: 8px;
-        text-align: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border: 1px solid #3a6bb0;
-    }
-    
-    .metric-value-enterprise {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #ffffff;
-        margin: 0.5rem 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .metric-label-enterprise {
-        font-size: 0.85rem;
-        color: #b3d9ff;
-        font-weight: 600;
+    .metric-card h3 {
+        font-size: 0.8rem;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Filters Panel */
-    .filters-panel {
-        background: #1a2435;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border: 1px solid #2a3a50;
-        margin-bottom: 1rem;
-    }
-    
-    /* Custom Slider */
-    .stSlider > div > div > div {
-        background: #00d4ff;
-    }
-    
-    /* Custom Select Box */
-    .stSelectbox > div > div {
-        background: #2a3a50;
-        color: white;
-    }
-    
-    /* Custom Button */
-    .stButton > button {
-        background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
-        color: white;
-        border: none;
-        padding: 0.7rem 2rem;
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #0099cc 0%, #0077aa 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
-    }
-    
-    /* Tab Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 1rem;
-        background: #1a2435;
-        padding: 0.5rem;
-        border-radius: 10px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: #2a3a50;
         color: #b3d9ff;
-        border-radius: 8px;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
+        margin-bottom: 0.3rem;
     }
-    
-    .stTabs [aria-selected="true"] {
-        background: #00d4ff;
-        color: #0e1a2b;
+    .metric-card p {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ======================================
-# ENTERPRISE DATA MANAGEMENT
-# ======================================
+st.markdown("""
+<div class="top-header">
+  <h1 style="margin:0; font-size:2.0rem;">🚀 ARMS Workflow Manager</h1>
+  <p style="margin:0.2rem 0 0;">Task Management • Analyst Performance • Enterprise Analytics</p>
+</div>
+""", unsafe_allow_html=True)
 
-class EnterpriseDataManager:
-    def __init__(self):
-        self.workflows = {}
-        self.combined_data = None
-        self.filters = {}
-        
-    def add_workflow(self, name, df):
-        """Add a workflow dataset"""
-        self.workflows[name] = df
-        st.success(f"✅ Workflow '{name}' loaded with {len(df)} rows")
-        
-    def combine_all_workflows(self):
-        """Combine all workflows into a single dataset"""
-        if not self.workflows:
-            return None
-            
-        combined_dfs = []
-        for name, df in self.workflows.items():
-            df_copy = df.copy()
-            df_copy['Workflow_Source'] = name
-            combined_dfs.append(df_copy)
-            
-        self.combined_data = pd.concat(combined_dfs, ignore_index=True)
-        return self.combined_data
-    
-    def get_filtered_data(self, filters=None):
-        """Apply filters to the combined data"""
-        if self.combined_data is None:
-            return None
-            
-        filtered_df = self.combined_data.copy()
-        
-        if filters:
-            for column, filter_config in filters.items():
-                if column in filtered_df.columns:
-                    if filter_config['type'] == 'range':
-                        if pd.api.types.is_numeric_dtype(filtered_df[column]):
-                            filtered_df = filtered_df[
-                                (filtered_df[column] >= filter_config['min']) & 
-                                (filtered_df[column] <= filter_config['max'])
-                            ]
-                    elif filter_config['type'] == 'multi_select':
-                        filtered_df = filtered_df[filtered_df[column].isin(filter_config['values'])]
-                    elif filter_config['type'] == 'date_range':
-                        filtered_df = filtered_df[
-                            (filtered_df[column] >= filter_config['start']) & 
-                            (filtered_df[column] <= filter_config['end'])
-                        ]
-        
-        return filtered_df
+# =========================
+# SESSION INIT
+# =========================
 
-# Initialize data manager
-if 'data_manager' not in st.session_state:
-    st.session_state.data_manager = EnterpriseDataManager()
+if "data" not in st.session_state:
+    st.session_state.data = {}
 
-# ======================================
-# POWER BI-LIKE FILTERS COMPONENT
-# ======================================
+if "task_assignments" not in st.session_state:
+    # {task_key: {"analyst": ..., "status": "In Progress"/"Paused"/"Completed"}}
+    st.session_state.task_assignments = {}
 
-def create_powerbi_filters_panel(df):
-    """Create Power BI-like filters panel"""
-    st.markdown('<div class="filters-panel">', unsafe_allow_html=True)
-    st.markdown("### 🎛️ Power Filters")
-    
-    filters = {}
-    
-    # Create columns for filters
-    num_columns = min(4, len(df.columns))
-    cols = st.columns(num_columns)
-    
-    current_col = 0
-    
-    for column in df.columns:
-        with cols[current_col]:
-            # Numeric columns - Range sliders
-            if pd.api.types.is_numeric_dtype(df[column]):
-                st.markdown(f"**{column}**")
-                min_val = float(df[column].min())
-                max_val = float(df[column].max())
-                selected_range = st.slider(
-                    f"Range for {column}",
-                    min_val, max_val, (min_val, max_val),
-                    key=f"filter_{column}"
-                )
-                filters[column] = {
-                    'type': 'range',
-                    'min': selected_range[0],
-                    'max': selected_range[1]
-                }
-            
-            # Date columns - Date range
-            elif pd.api.types.is_datetime64_any_dtype(df[column]):
-                st.markdown(f"**{column}**")
-                min_date = df[column].min().date()
-                max_date = df[column].max().date()
-                selected_dates = st.date_input(
-                    f"Date range for {column}",
-                    [min_date, max_date],
-                    min_date, max_date,
-                    key=f"date_filter_{column}"
-                )
-                if len(selected_dates) == 2:
-                    filters[column] = {
-                        'type': 'date_range',
-                        'start': selected_dates[0],
-                        'end': selected_dates[1]
-                    }
-            
-            # Categorical columns - Multi-select
-            else:
-                unique_values = df[column].unique()
-                if len(unique_values) <= 50:  # Only show multi-select for reasonable number of values
-                    st.markdown(f"**{column}**")
-                    selected_values = st.multiselect(
-                        f"Select {column}",
-                        options=unique_values,
-                        default=unique_values,
-                        key=f"select_{column}"
-                    )
-                    filters[column] = {
-                        'type': 'multi_select',
-                        'values': selected_values
-                    }
-        
-        current_col = (current_col + 1) % num_columns
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    return filters
+if "active_task" not in st.session_state:
+    st.session_state.active_task = None  # (sheet_name, index)
 
-# ======================================
-# ADVANCED VISUALIZATION COMPONENTS
-# ======================================
 
-def create_advanced_dashboard(df, filters):
-    """Create Power BI-like advanced dashboard"""
-    
-    # Apply filters
-    filtered_df = st.session_state.data_manager.get_filtered_data(filters)
-    
-    if filtered_df is None or len(filtered_df) == 0:
-        st.warning("No data available after applying filters.")
-        return
-    
-    # Key Metrics Row
-    st.markdown("### 📊 Executive Summary")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        total_records = len(filtered_df)
-        st.markdown(f'<div class="metric-card-enterprise"><div class="metric-value-enterprise">{total_records:,}</div><div class="metric-label-enterprise">Total Records</div></div>', unsafe_allow_html=True)
-    
-    # Dynamic metrics based on available numeric columns
-    numeric_cols = filtered_df.select_dtypes(include=[np.number]).columns
-    if len(numeric_cols) >= 5:
-        metrics_data = [
-            (numeric_cols[0], "sum"),
-            (numeric_cols[1], "mean"), 
-            (numeric_cols[2], "max"),
-            (numeric_cols[3], "min"),
-            (numeric_cols[4], "std")
-        ]
+# =========================
+# SIDEBAR – USER & DATA LOAD
+# =========================
+
+with st.sidebar:
+    st.subheader("👤 Logged-in User")
+
+    current_analyst = st.selectbox(
+        "Select Analyst",
+        options=["(Stakeholder View)"] + ANALYSTS,
+        index=0
+    )
+
+    st.markdown("---")
+    st.subheader("📂 Data Source")
+
+    master_file = st.file_uploader(
+        "Upload ARMS Master Excel",
+        type=["xlsx", "xls"],
+        help="File containing Pending, UCC, Judgments, Chapter11, Chapter7, Trade Tapes, Analyst Data, Data Lake, Workflows sheets."
+    )
+
+    if master_file:
+        try:
+            xls = pd.ExcelFile(master_file)
+            # Map sheet names to our logical names (adjust to exact names in your file)
+            sheet_map = {
+                "Pending": "pending",
+                "UCC": "ucc",
+                "Judgements": "judgments",
+                "Chapter11": "ch11",
+                "Chapte11": "ch11",
+                "Chapter7": "ch7",
+                "Trade Tapes": "trade_tapes",
+                "Analyst Data": "analyst_data",
+                "Data Lake": "data_lake",
+                "Workflows": "workflows",
+            }
+
+            loaded_sheets = []
+            for sheet_name, key in sheet_map.items():
+                if sheet_name in xls.sheet_names:
+                    df = pd.read_excel(master_file, sheet_name=sheet_name)
+                    st.session_state.data[key] = df
+                    loaded_sheets.append(sheet_name)
+
+            st.success(f"Loaded sheets: {', '.join(loaded_sheets)}")
+
+        except Exception as e:
+            st.error(f"Error reading Excel: {e}")
+
     else:
-        # Fallback if not enough numeric columns
-        metrics_data = [
-            ("Total Records", "count"),
-            ("Avg Value", "mean"),
-            ("Max Value", "max"),
-            ("Min Value", "min"),
-            ("Std Dev", "std")
-        ]
-    
-    metric_cols = [col2, col3, col4, col5, col6]
-    for (col_name, agg_func), col in zip(metrics_data, metric_cols):
-        with col:
-            if col_name in filtered_df.columns and pd.api.types.is_numeric_dtype(filtered_df[col_name]):
-                if agg_func == "sum":
-                    value = filtered_df[col_name].sum()
-                    formatted_value = f"{value:,.0f}"
-                elif agg_func == "mean":
-                    value = filtered_df[col_name].mean()
-                    formatted_value = f"{value:,.2f}"
-                elif agg_func == "max":
-                    value = filtered_df[col_name].max()
-                    formatted_value = f"{value:,.0f}"
-                elif agg_func == "min":
-                    value = filtered_df[col_name].min()
-                    formatted_value = f"{value:,.0f}"
-                elif agg_func == "std":
-                    value = filtered_df[col_name].std()
-                    formatted_value = f"{value:,.2f}"
-                else:
-                    value = len(filtered_df)
-                    formatted_value = f"{value:,}"
-                
-                st.markdown(f'<div class="metric-card-enterprise"><div class="metric-value-enterprise">{formatted_value}</div><div class="metric-label-enterprise">{agg_func.title()} {col_name}</div></div>', unsafe_allow_html=True)
-    
-    # Chart Configuration
-    st.markdown("### 📈 Advanced Analytics Studio")
-    
-    # Chart Configuration Panel
-    with st.expander("🎨 Chart Configuration", expanded=True):
-        config_col1, config_col2, config_col3, config_col4 = st.columns(4)
-        
-        with config_col1:
-            # X-Axis selection
-            x_axis = st.selectbox(
-                "X-Axis Dimension",
-                options=[''] + list(filtered_df.columns),
-                key="x_axis_select"
-            )
-        
-        with config_col2:
-            # Y-Axis selection (multiple)
-            y_axes = st.multiselect(
-                "Y-Axis Measures",
-                options=[col for col in filtered_df.columns if pd.api.types.is_numeric_dtype(filtered_df[col])],
-                key="y_axes_select"
-            )
-        
-        with config_col3:
-            # Color by
-            color_by = st.selectbox(
-                "Color By (Dimension)",
-                options=[''] + [col for col in filtered_df.columns if not pd.api.types.is_numeric_dtype(filtered_df[col])],
-                key="color_by_select"
-            )
-        
-        with config_col4:
-            # Chart type
-            chart_type = st.selectbox(
-                "Chart Type",
-                options=["Bar Chart", "Line Chart", "Scatter Plot", "Pie Chart", "Area Chart", "Heatmap"],
-                key="chart_type_select"
-            )
-    
-    # Create charts based on configuration
-    if x_axis and y_axes:
-        chart_col1, chart_col2 = st.columns(2)
-        
-        with chart_col1:
-            try:
-                if chart_type == "Bar Chart":
-                    if len(y_axes) == 1:
-                        fig = px.bar(
-                            filtered_df, 
-                            x=x_axis, 
-                            y=y_axes[0],
-                            color=color_by if color_by else None,
-                            title=f"{y_axes[0]} by {x_axis}",
-                            template="plotly_dark"
-                        )
-                    else:
-                        # Multiple bars
-                        fig = go.Figure()
-                        for y_axis in y_axes:
-                            fig.add_trace(go.Bar(
-                                name=y_axis,
-                                x=filtered_df[x_axis],
-                                y=filtered_df[y_axis]
-                            ))
-                        fig.update_layout(
-                            title=f"Multiple Metrics by {x_axis}",
-                            template="plotly_dark",
-                            barmode='group'
-                        )
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "Line Chart":
-                    fig = px.line(
-                        filtered_df, 
-                        x=x_axis, 
-                        y=y_axes[0],
-                        color=color_by if color_by else None,
-                        title=f"{y_axes[0]} Trend by {x_axis}",
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "Scatter Plot" and len(y_axes) >= 2:
-                    fig = px.scatter(
-                        filtered_df,
-                        x=y_axes[0],
-                        y=y_axes[1],
-                        color=color_by if color_by else None,
-                        size=y_axes[2] if len(y_axes) > 2 else None,
-                        title=f"{y_axes[1]} vs {y_axes[0]}",
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif chart_type == "Pie Chart":
-                    fig = px.pie(
-                        filtered_df,
-                        names=x_axis,
-                        values=y_axes[0],
-                        title=f"Distribution of {y_axes[0]} by {x_axis}",
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-            except Exception as e:
-                st.error(f"Error creating chart: {str(e)}")
-        
-        with chart_col2:
-            # Additional chart or data summary
-            st.markdown("### 📋 Data Summary")
-            
-            # Column statistics
-            if len(numeric_cols) > 0:
-                summary_stats = filtered_df[numeric_cols].describe()
-                st.dataframe(summary_stats, use_container_width=True)
-            
-            # Data quality info
-            st.markdown("#### Data Quality")
-            quality_col1, quality_col2, quality_col3 = st.columns(3)
-            
-            with quality_col1:
-                missing_values = filtered_df.isnull().sum().sum()
-                st.metric("Missing Values", missing_values)
-            
-            with quality_col2:
-                duplicate_rows = filtered_df.duplicated().sum()
-                st.metric("Duplicate Rows", duplicate_rows)
-            
-            with quality_col3:
-                memory_usage = f"{filtered_df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB"
-                st.metric("Memory Usage", memory_usage)
-    
-    # Advanced Analytics Section
-    st.markdown("### 🔍 Advanced Insights")
-    
-    insight_col1, insight_col2 = st.columns(2)
-    
-    with insight_col1:
-        # Correlation heatmap
-        if len(numeric_cols) >= 2:
-            st.markdown("#### Correlation Matrix")
-            corr_matrix = filtered_df[numeric_cols].corr()
-            fig = px.imshow(
-                corr_matrix,
-                title="Feature Correlations",
-                color_continuous_scale="RdBu_r",
-                aspect="auto"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with insight_col2:
-        # Top categories
-        categorical_cols = filtered_df.select_dtypes(include=['object']).columns
-        if len(categorical_cols) > 0:
-            st.markdown("#### Top Categories")
-            top_cat_col = st.selectbox("Select Category", categorical_cols, key="top_cat_select")
-            if top_cat_col:
-                top_categories = filtered_df[top_cat_col].value_counts().head(10)
-                fig = px.bar(
-                    x=top_categories.index,
-                    y=top_categories.values,
-                    title=f"Top 10 {top_cat_col}",
-                    template="plotly_dark"
+        st.info("Upload the master Excel file to start.")
+
+# Helper to get DF safely
+def get_df(key):
+    return st.session_state.data.get(key, pd.DataFrame())
+
+# =========================
+# UTILITY: NEXT TASK SELECTION
+# =========================
+
+def get_next_pending_task(pending_df, analyst_name):
+    """
+    Simple 'Get Next Task' logic:
+    - Sort by Import Date then File Date (if present)
+    - Choose first row that is not already assigned
+    """
+    if pending_df.empty:
+        return None
+
+    df = pending_df.copy()
+    # Try to parse dates if columns exist
+    for col in ["Import Date", "File Date", "Date IND Format"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    sort_cols = [c for c in ["Import Date", "File Date", "Date IND Format"] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols)
+
+    for idx, row in df.iterrows():
+        task_key = f"Pending::{idx}"
+        assign_info = st.session_state.task_assignments.get(task_key)
+        if assign_info is None or assign_info.get("status") != "Completed":
+            # assign to this analyst
+            st.session_state.task_assignments[task_key] = {
+                "analyst": analyst_name,
+                "status": "In Progress",
+                "assigned_at": dt.datetime.now(),
+            }
+            st.session_state.active_task = ("pending", idx)
+            return task_key, row
+
+    return None
+
+# =========================
+# TAB 1 – TASK MANAGEMENT
+# =========================
+
+def tab_task_management():
+    st.subheader("⏱️ Task Management")
+
+    pending_df = get_df("pending")
+    if pending_df.empty:
+        st.warning("Pending sheet not loaded.")
+        return
+
+    # KPI row
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        total_items = pending_df["Total Pending"].sum() if "Total Pending" in pending_df.columns else len(pending_df)
+        st.markdown('<div class="metric-card"><h3>Total Pending Items</h3>'
+                    f'<p>{int(total_items):,}</p></div>', unsafe_allow_html=True)
+
+    with col2:
+        reviewed = pending_df["Reviewed"].sum() if "Reviewed" in pending_df.columns else 0
+        st.markdown('<div class="metric-card"><h3>Reviewed</h3>'
+                    f'<p>{int(reviewed):,}</p></div>', unsafe_allow_html=True)
+
+    with col3:
+        assigned_count = sum(1 for k, v in st.session_state.task_assignments.items() if v["status"] != "Completed")
+        st.markdown('<div class="metric-card"><h3>In-Progress Tasks</h3>'
+                    f'<p>{assigned_count:,}</p></div>', unsafe_allow_html=True)
+
+    with col4:
+        st.markdown('<div class="metric-card"><h3>Active Analysts</h3>'
+                    f'<p>{len(set(v["analyst"] for v in st.session_state.task_assignments.values()))}</p></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Get Next Task – only for analysts, not stakeholder view
+    if current_analyst != "(Stakeholder View)":
+        if st.button("🎯 Get Next Task", type="primary"):
+            res = get_next_pending_task(pending_df, current_analyst)
+            if res is None:
+                st.success("No more unassigned tasks in Pending.")
+            else:
+                st.success("Task assigned. Scroll to 'Active Task' section below.")
+
+    # Active Task panel
+    st.markdown("### 📌 Active Task")
+
+    if st.session_state.active_task is None:
+        st.info("No active task selected. Click **Get Next Task** to start.")
+    else:
+        sheet_key, row_idx = st.session_state.active_task
+        df = get_df(sheet_key)
+        if row_idx not in df.index:
+            st.warning("Active task no longer exists in data.")
+        else:
+            row = df.loc[row_idx]
+            task_key = f"{sheet_key}::{row_idx}"
+            assign_info = st.session_state.task_assignments.get(task_key, {})
+
+            st.write(f"**Workflow:** Pending | **Row ID:** {row_idx}")
+            if "Subscriber" in df.columns:
+                st.write(f"**Subscriber:** {row['Subscriber']}")
+            if "Import Date" in df.columns:
+                st.write(f"**Import Date:** {row['Import Date']}")
+
+            # Show all columns in an expander
+            with st.expander("View full task details"):
+                st.dataframe(row.to_frame().T, use_container_width=True)
+
+            # Actions row
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("⏸️ Pause Task"):
+                    if assign_info:
+                        assign_info["status"] = "Paused"
+                    st.success("Task paused.")
+
+            with c2:
+                if st.button("✅ Complete Task"):
+                    if assign_info:
+                        assign_info["status"] = "Completed"
+                        assign_info["completed_at"] = dt.datetime.now()
+                    st.session_state.active_task = None
+                    st.success("Task marked as completed.")
+
+            with c3:
+                uploaded_files = st.file_uploader(
+                    "Attach emails / documents",
+                    type=None,                  # ✅ allows .eml and anything else
+                    accept_multiple_files=True,
+                    key=f"upload_{task_key}"
                 )
-                st.plotly_chart(fig, use_container_width=True)
-    
-    # Data Export
-    st.markdown("### 💾 Export Results")
-    
-    export_col1, export_col2, export_col3 = st.columns(3)
-    
-    with export_col1:
-        # CSV Export
-        csv = filtered_df.to_csv(index=False)
+                if uploaded_files:
+                    st.info(f"{len(uploaded_files)} file(s) attached to this task (not persisted yet).")
+
+    st.markdown("---")
+
+    # Who is working on what?
+    st.markdown("### 👀 Current Assignments")
+
+    if st.session_state.task_assignments:
+        rows = []
+        for tkey, info in st.session_state.task_assignments.items():
+            sheet_name, idx = tkey.split("::")
+            rows.append({
+                "Workflow": sheet_name,
+                "Row ID": idx,
+                "Analyst": info["analyst"],
+                "Status": info["status"],
+                "Assigned At": info.get("assigned_at"),
+                "Completed At": info.get("completed_at"),
+            })
+        assign_df = pd.DataFrame(rows)
+        if current_analyst != "(Stakeholder View)":
+            assign_df = assign_df[assign_df["Analyst"] == current_analyst]
+        st.dataframe(assign_df, use_container_width=True)
+    else:
+        st.info("No tasks assigned yet.")
+
+# =========================
+# TAB 2 – ANALYST PERFORMANCE
+# =========================
+
+def tab_analyst_performance():
+    st.subheader("👥 Analyst Performance")
+
+    analyst_df = get_df("analyst_data")
+    data_lake_df = get_df("data_lake")
+
+    if analyst_df.empty and data_lake_df.empty:
+        st.warning("Analyst Data / Data Lake sheets not loaded.")
+        return
+
+    # Basic clean-up
+    if "Date" in analyst_df.columns:
+        analyst_df["Date"] = pd.to_datetime(analyst_df["Date"], errors="coerce")
+
+    # Filter by analyst
+    if current_analyst != "(Stakeholder View)":
+        analyst_filtered = analyst_df[analyst_df["Team Member"] == current_analyst] \
+            if "Team Member" in analyst_df.columns else analyst_df
+        dl_filtered = data_lake_df[data_lake_df["team_member"] == current_analyst] \
+            if "team_member" in data_lake_df.columns else data_lake_df
+    else:
+        analyst_filtered = analyst_df
+        dl_filtered = data_lake_df
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if "Achieved Qty" in analyst_filtered.columns:
+            achieved = analyst_filtered["Achieved Qty"].sum()
+            st.markdown('<div class="metric-card"><h3>Total Units Achieved</h3>'
+                        f'<p>{int(achieved):,}</p></div>', unsafe_allow_html=True)
+    with col2:
+        if "Target Qty" in analyst_filtered.columns:
+            target = analyst_filtered["Target Qty"].sum()
+            st.markdown('<div class="metric-card"><h3>Total Target</h3>'
+                        f'<p>{int(target):,}</p></div>', unsafe_allow_html=True)
+    with col3:
+        if not analyst_filtered.empty and {"Achieved Qty", "Target Qty"}.issubset(analyst_filtered.columns):
+            pct = (analyst_filtered["Achieved Qty"].sum() /
+                   max(1, analyst_filtered["Target Qty"].sum())) * 100
+            st.markdown('<div class="metric-card"><h3>Target Achievement %</h3>'
+                        f'<p>{pct:,.1f}%</p></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    if not analyst_filtered.empty:
+        st.markdown("#### Daily Performance (Analyst Data)")
+        st.dataframe(analyst_filtered, use_container_width=True)
+
+    if not dl_filtered.empty:
+        st.markdown("#### Monthly Work Units (Data Lake)")
+        pivot = dl_filtered[["month_year", "total_work_units", "pending_actions"]].copy()
+        st.dataframe(pivot, use_container_width=True)
+
+# =========================
+# TAB 3 – ADVANCED ANALYTICS (STAKEHOLDERS)
+# =========================
+
+def tab_advanced_analytics():
+    st.subheader("📈 Advanced Analytics – Stakeholder View")
+
+    pending_df = get_df("pending")
+    workflows_df = get_df("workflows")
+    data_lake_df = get_df("data_lake")
+
+    if pending_df.empty and workflows_df.empty and data_lake_df.empty:
+        st.warning("Load Pending / Workflows / Data Lake sheets for this tab.")
+        return
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if not pending_df.empty:
+            total_pending = pending_df["Total Pending"].sum() if "Total Pending" in pending_df.columns else len(pending_df)
+            st.markdown('<div class="metric-card"><h3>Pending Items</h3>'
+                        f'<p>{int(total_pending):,}</p></div>', unsafe_allow_html=True)
+    with col2:
+        if not data_lake_df.empty and "total_work_units" in data_lake_df.columns:
+            twu = data_lake_df["total_work_units"].sum()
+            st.markdown('<div class="metric-card"><h3>Total Work Units</h3>'
+                        f'<p>{int(twu):,}</p></div>', unsafe_allow_html=True)
+    with col3:
+        if not workflows_df.empty and "Workflow Name" in workflows_df.columns:
+            workflows_count = workflows_df["Workflow Name"].nunique()
+            st.markdown('<div class="metric-card"><h3>Active Workflows</h3>'
+                        f'<p>{workflows_count}</p></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    if not workflows_df.empty:
+        st.markdown("#### Workflow SLA Overview")
+        st.dataframe(
+            workflows_df[[
+                "Workflow Name", "Workflow Type", "Target Metric",
+                "Measurement Unit", "Monthly Target", "Priority", "SLA Hours",
+                "Quality Required?"
+            ]],
+            use_container_width=True
+        )
+
+    if not data_lake_df.empty:
+        st.markdown("#### Volume by Analyst (from Data Lake)")
+        if {"team_member", "total_work_units"}.issubset(data_lake_df.columns):
+            agg = data_lake_df.groupby("team_member")["total_work_units"].sum().reset_index()
+            st.dataframe(agg.sort_values("total_work_units", ascending=False), use_container_width=True)
+
+# =========================
+# TAB 4 – WORKFLOW & SLA SETUP
+# =========================
+
+def tab_workflow_config():
+    st.subheader("⚙️ Workflow & SLA Setup")
+
+    workflows_df = get_df("workflows").copy()
+
+    if workflows_df.empty:
+        st.info("No Workflows sheet loaded. You can start creating one here and then export it.")
+        workflows_df = pd.DataFrame(columns=[
+            "No", "Workflow Name", "Workflow Type", "Target Metric",
+            "Measurement Unit", "Monthly Target", "Priority", "SLA Hours",
+            "Quality Required?"
+        ])
+
+    st.markdown("### Existing Workflows")
+    st.dataframe(workflows_df, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### ➕ Create / Edit Workflow")
+
+    with st.form("new_workflow_form"):
+        wf_name = st.text_input("Workflow Name")
+        wf_type = st.selectbox("Workflow Type", ["Volume", "Target", "Quality"])
+        target_metric = st.text_input("Target Metric", value="Completion %")
+        measurement_unit = st.text_input("Measurement Unit", value="Items")
+        monthly_target = st.number_input("Monthly Target", min_value=0, value=100)
+        priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"], index=2)
+        sla_hours = st.number_input("SLA Hours", min_value=1, value=72)
+        quality_required = st.checkbox("Quality Required?", value=True)
+
+        submitted = st.form_submit_button("Save Workflow")
+        if submitted and wf_name:
+            new_row = {
+                "No": len(workflows_df) + 1,
+                "Workflow Name": wf_name,
+                "Workflow Type": wf_type,
+                "Target Metric": target_metric,
+                "Measurement Unit": measurement_unit,
+                "Monthly Target": monthly_target,
+                "Priority": priority,
+                "SLA Hours": sla_hours,
+                "Quality Required?": "Yes" if quality_required else "No",
+            }
+            workflows_df = workflows_df._append(new_row, ignore_index=True)
+            st.session_state.data["workflows"] = workflows_df
+            st.success("Workflow saved in session. You can export it as Excel from below.")
+
+    st.markdown("### 💾 Export Workflows")
+    if not workflows_df.empty:
+        csv = workflows_df.to_csv(index=False)
         st.download_button(
-            "📥 Download Filtered Data (CSV)",
+            "Download Workflows as CSV",
             data=csv,
-            file_name="filtered_analytics_data.csv",
+            file_name="ARMS_Workflows_Config.csv",
             mime="text/csv"
         )
-    
-    with export_col2:
-        # Excel Export
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            filtered_df.to_excel(writer, sheet_name='Filtered_Data', index=False)
-            # Add summary sheet
-            summary_df = filtered_df.describe()
-            summary_df.to_excel(writer, sheet_name='Summary_Statistics')
-        excel_data = output.getvalue()
-        
-        st.download_button(
-            "📊 Download Full Report (Excel)",
-            data=excel_data,
-            file_name="analytics_report.xlsx",
-            mime="application/vnd.ms-excel"
-        )
-    
-    with export_col3:
-        # Chart Export
-        if st.button("🖼️ Export Dashboard as Image"):
-            st.info("Chart export functionality would be implemented here")
 
-# ======================================
-# WORKFLOW MANAGEMENT
-# ======================================
+# =========================
+# MAIN
+# =========================
 
-def workflow_management_tab():
-    """Manage multiple workflow datasets"""
-    st.markdown('<div class="powerbi-card">', unsafe_allow_html=True)
-    st.markdown("### 🔄 Multi-Workflow Management")
-    
-    # Upload multiple Excel files
-    uploaded_files = st.file_uploader(
-        "Upload Multiple Excel Workflows",
-        type=["xlsx", "xls"],
-        accept_multiple_files=True,
-        key="multi_workflow_upload"
-    )
-    
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            try:
-                # Get sheet names
-                xl_file = pd.ExcelFile(uploaded_file)
-                sheet_names = xl_file.sheet_names
-                
-                # Let user select which sheets to load
-                selected_sheets = st.multiselect(
-                    f"Select sheets from {uploaded_file.name}",
-                    options=sheet_names,
-                    default=sheet_names,
-                    key=f"sheets_{uploaded_file.name}"
-                )
-                
-                for sheet_name in selected_sheets:
-                    df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
-                    workflow_name = f"{uploaded_file.name} - {sheet_name}"
-                    st.session_state.data_manager.add_workflow(workflow_name, df)
-                    
-            except Exception as e:
-                st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-    
-    # Show loaded workflows
-    if st.session_state.data_manager.workflows:
-        st.markdown("#### 📂 Loaded Workflows")
-        
-        workflows_col1, workflows_col2 = st.columns([3, 1])
-        
-        with workflows_col1:
-            for workflow_name, df in st.session_state.data_manager.workflows.items():
-                with st.expander(f"📊 {workflow_name} ({len(df)} rows)"):
-                    st.dataframe(df.head(10), use_container_width=True)
-        
-        with workflows_col2:
-            st.markdown("#### Actions")
-            if st.button("🔄 Combine All Workflows", use_container_width=True):
-                combined_df = st.session_state.data_manager.combine_all_workflows()
-                if combined_df is not None:
-                    st.success(f"✅ Combined {len(st.session_state.data_manager.workflows)} workflows into {len(combined_df)} total records")
-            
-            if st.button("🗑️ Clear All Workflows", use_container_width=True):
-                st.session_state.data_manager.workflows = {}
-                st.session_state.data_manager.combined_data = None
-                st.rerun()
-    
-    st.markdown("</div>", unsafe_allow_html=True)
+tab1, tab2, tab3, tab4 = st.tabs([
+    "⏱️ Task Management",
+    "👥 Analyst Performance",
+    "📈 Advanced Analytics",
+    "⚙️ Workflow & SLA Setup",
+])
 
-# ======================================
-# SAMPLE DATA GENERATOR
-# ======================================
-
-def generate_sample_data():
-    """Generate comprehensive sample data for demonstration"""
-    
-    # Sample workflow 1: Sales Data
-    dates = pd.date_range('2024-01-01', '2024-03-20', freq='D')
-    sales_data = []
-    
-    for date in dates:
-        for region in ['North', 'South', 'East', 'West']:
-            for product in ['Product A', 'Product B', 'Product C']:
-                sales_data.append({
-                    'Date': date,
-                    'Region': region,
-                    'Product': product,
-                    'Sales_Amount': np.random.randint(1000, 50000),
-                    'Units_Sold': np.random.randint(10, 500),
-                    'Profit': np.random.randint(100, 10000),
-                    'Customer_Rating': np.random.uniform(1, 5),
-                    'Category': np.random.choice(['Electronics', 'Furniture', 'Clothing'])
-                })
-    
-    sales_df = pd.DataFrame(sales_data)
-    
-    # Sample workflow 2: Operations Data
-    operations_data = []
-    for date in dates[:100]:  # Fewer dates for variety
-        for department in ['HR', 'Finance', 'IT', 'Operations']:
-            operations_data.append({
-                'Date': date,
-                'Department': department,
-                'Tasks_Completed': np.random.randint(5, 100),
-                'Processing_Time_Minutes': np.random.randint(10, 300),
-                'Quality_Score': np.random.uniform(80, 100),
-                'Backlog_Items': np.random.randint(0, 50),
-                'Team_Size': np.random.randint(3, 15)
-            })
-    
-    operations_df = pd.DataFrame(operations_data)
-    
-    return {
-        "Sales Performance": sales_df,
-        "Operations Metrics": operations_df
-    }
-
-# ======================================
-# MAIN APPLICATION
-# ======================================
-
-def main():
-    # Enterprise Header
-    st.markdown("""
-    <div class="enterprise-header">
-        <h1 style="margin:0; color:white; font-size:2.5rem;">🚀 ARMS ENTERPRISE ANALYTICS</h1>
-        <p style="margin:0; opacity:0.9; font-size:1.1rem;">Power BI-like Analytics Platform with Multi-Workflow Management</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Initialize with sample data if empty
-    if not st.session_state.data_manager.workflows:
-        st.info("🌟 Loading sample data for demonstration...")
-        sample_data = generate_sample_data()
-        for name, df in sample_data.items():
-            st.session_state.data_manager.add_workflow(name, df)
-        st.session_state.data_manager.combine_all_workflows()
-    
-    # Main Navigation Tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Analytics Dashboard", "🔄 Workflow Management", "⚙️ Data Configuration"])
-    
-    with tab1:
-        st.markdown('<div class="powerbi-card">', unsafe_allow_html=True)
-        
-        if st.session_state.data_manager.combined_data is not None:
-            # Create Power BI-like filters
-            filters = create_powerbi_filters_panel(st.session_state.data_manager.combined_data)
-            
-            # Create advanced dashboard
-            create_advanced_dashboard(st.session_state.data_manager.combined_data, filters)
-        else:
-            st.warning("Please load and combine workflows in the Workflow Management tab first.")
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab2:
-        workflow_management_tab()
-    
-    with tab3:
-        st.markdown('<div class="powerbi-card">', unsafe_allow_html=True)
-        st.markdown("### ⚙️ System Configuration")
-        
-        config_col1, config_col2 = st.columns(2)
-        
-        with config_col1:
-            st.markdown("#### Data Processing")
-            max_rows = st.slider("Maximum Rows to Process", 1000, 1000000, 100000)
-            cache_enabled = st.checkbox("Enable Data Caching", value=True)
-            auto_refresh = st.checkbox("Auto-refresh Dashboard", value=False)
-            
-        with config_col2:
-            st.markdown("#### Visualization Settings")
-            chart_theme = st.selectbox("Chart Theme", ["Plotly Dark", "Plotly White", "Plotly Native"])
-            default_chart_type = st.selectbox("Default Chart Type", ["Bar Chart", "Line Chart", "Scatter Plot"])
-            animation_enabled = st.checkbox("Enable Chart Animations", value=True)
-        
-        if st.button("💾 Save Configuration", use_container_width=True):
-            st.success("Configuration saved successfully!")
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
+with tab1:
+    tab_task_management()
+with tab2:
+    tab_analyst_performance()
+with tab3:
+    tab_advanced_analytics()
+with tab4:
+    tab_workflow_config()
