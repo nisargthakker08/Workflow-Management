@@ -1,873 +1,815 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
-import base64
-import io
-import time
-import hashlib
-import json
+from email import policy
+from email.parser import BytesParser
 
 # ======================================
-# PAGE CONFIG & STYLING
+# PAGE CONFIG
 # ======================================
 
 st.set_page_config(
-    page_title="ARMS Enterprise Workflow",
+    page_title="ARMS Workflow Management",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Professional Appian-like styling
-st.markdown("""
+# ======================================
+# STYLING
+# ======================================
+
+st.markdown(
+    """
 <style>
-    /* Main container */
-    .main {
-        background-color: #f8f9fa;
-    }
-    
-    /* Header */
-    .enterprise-header {
-        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+    .main-header {
+        font-size: 2.3rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 1.5rem 2rem;
-        border-radius: 0px;
-        margin-bottom: 0rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        border-bottom: 4px solid #2980b9;
+        padding: 1.6rem 2rem;
+        border-radius: 15px;
+        text-align: left;
+        margin-bottom: 1.2rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+        border: 1px solid rgba(255,255,255,0.2);
     }
-    
-    /* Cards */
-    .enterprise-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border-left: 4px solid #3498db;
-        margin-bottom: 1rem;
-        border: 1px solid #e1e8ed;
-    }
-    
-    /* Metrics */
     .metric-card {
-        background: white;
-        padding: 1.2rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 12px;
         text-align: center;
-        border-top: 4px solid #3498db;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
     }
-    
-    .metric-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0.5rem 0;
-    }
-    
     .metric-label {
         font-size: 0.9rem;
-        color: #7f8c8d;
+        opacity: 0.9;
+    }
+    .metric-value {
+        font-size: 1.5rem;
         font-weight: 600;
-        text-transform: uppercase;
+        margin-top: 0.3rem;
     }
-    
-    /* Buttons */
-    .stButton button {
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        color: white;
-        border: none;
-        padding: 0.5rem 1.5rem;
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.3s ease;
+    .section-card {
+        background: #ffffff;
+        padding: 1.4rem;
+        border-radius: 12px;
+        box-shadow: 0 5px 18px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+        margin-top: 0.7rem;
+        margin-bottom: 0.7rem;
     }
-    
-    .stButton button:hover {
-        background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-    }
-    
-    /* Status badges */
     .status-badge {
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
+        padding: 0.2rem 0.7rem;
+        border-radius: 999px;
         font-size: 0.75rem;
         font-weight: 600;
         display: inline-block;
     }
-    
-    .status-new { background: #e3f2fd; color: #1976d2; }
-    .status-in-progress { background: #fff3e0; color: #f57c00; }
-    .status-paused { background: #f5f5f5; color: #616161; }
-    .status-completed { background: #e8f5e8; color: #388e3c; }
-    
-    /* Priority badges */
-    .priority-critical { background: #ffebee; color: #d32f2f; }
-    .priority-high { background: #fce4ec; color: #c2185b; }
-    .priority-medium { background: #fff3e0; color: #ef6c00; }
-    .priority-low { background: #e8f5e8; color: #388e3c; }
-    
-    /* Tables */
-    .dataframe {
-        border: 1px solid #e1e8ed;
-        border-radius: 8px;
+    .status-New {
+        background: #e0f2fe;
+        color: #0369a1;
     }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
+    .status-In\\ Progress {
+        background: #fef3c7;
+        color: #92400e;
     }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f8f9fa;
-        border-radius: 8px 8px 0px 0px;
-        gap: 1rem;
-        padding: 1rem 2rem;
-        font-weight: 600;
+    .status-Paused {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    .status-Completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .priority-Critical,
+    .priority-High {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+    .priority-Medium {
+        background: #fffbeb;
+        color: #92400e;
+    }
+    .priority-Low {
+        background: #ecfeff;
+        color: #155e75;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ======================================
-# AUTHENTICATION SYSTEM
+# CONSTANTS
 # ======================================
 
-USERS = {
-    "admin": {"password": "admin123", "role": "manager", "name": "System Administrator"},
-    "nisarg": {"password": "nisarg123", "role": "analyst", "name": "Nisarg Thakker"},
-    "komal": {"password": "komal123", "role": "analyst", "name": "Komal Khamar"},
-    "ayushi": {"password": "ayushi123", "role": "analyst", "name": "Ayushi Chandel"}
-}
+ANALYSTS = [
+    "Nisarg Thakker",
+    "Jen Shears",
+    "Komal Khamar",
+    "Janet Yanatos",
+    "Rondrea Carroll",
+    "Devanshi Joshi",
+    "Divyesh Fofandi",
+    "Parth Chelani",
+    "Prerna Kesrani",
+    "Ayushi Chandel",
+]
 
-ANALYSTS = ["Nisarg Thakker", "Komal Khamar", "Ayushi Chandel", "Jen Shears", "Janet Yanatos"]
-
-def authenticate(username, password):
-    if username in USERS and USERS[username]["password"] == password:
-        return USERS[username]
-    return None
-
-def initialize_session_state():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-    if "current_user" not in st.session_state:
-        st.session_state.current_user = None
-    if "user_role" not in st.session_state:
-        st.session_state.user_role = None
-    if "user_name" not in st.session_state:
-        st.session_state.user_name = None
-        
-    # Task management
-    if "tasks" not in st.session_state:
-        st.session_state.tasks = []
-    if "next_task_id" not in st.session_state:
-        st.session_state.next_task_id = 1001
-        
-    # Analytics data
-    if "analytics_data" not in st.session_state:
-        st.session_state.analytics_data = {}
-    if "current_sheet" not in st.session_state:
-        st.session_state.current_sheet = None
-
-def login_page():
-    st.markdown('<div class="enterprise-header"><h1 style="margin:0; color:white;">🚀 ARMS Enterprise Workflow System</h1><p style="margin:0; opacity:0.9;">Secure Workflow Management Platform</p></div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        with st.container():
-            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-            st.subheader("🔐 User Login")
-            
-            username = st.text_input("Username", placeholder="Enter your username")
-            password = st.text_input("Password", type="password", placeholder="Enter your password")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Login", use_container_width=True):
-                    user = authenticate(username, password)
-                    if user:
-                        st.session_state.authenticated = True
-                        st.session_state.current_user = username
-                        st.session_state.user_role = user["role"]
-                        st.session_state.user_name = user["name"]
-                        st.success(f"Welcome {user['name']}!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid credentials")
-            with col2:
-                if st.button("Reset", use_container_width=True):
-                    st.rerun()
-                    
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Demo credentials
-            with st.expander("Demo Credentials"):
-                st.write("**Manager:** admin / admin123")
-                st.write("**Analysts:** nisarg / nisarg123, komal / komal123, ayushi / ayushi123")
+STATUSES = ["New", "In Progress", "Paused", "Completed"]
+PRIORITIES = ["Critical", "High", "Medium", "Low"]
 
 # ======================================
-# TASK MANAGEMENT SYSTEM
+# SAFETY: RESET BROKEN TASK STATE
+# (if an old version stored a DataFrame instead of list)
 # ======================================
 
-def create_sample_tasks():
-    """Create realistic sample tasks"""
-    companies = ["US Foods Holding Corp.", "Medline Inc.", "Sodexo", "Bath & Body Works, Inc.", "Ace Hardware"]
-    doc_types = ["10-Q", "10-K", "8-K", "Annual Report", "Filing"]
-    departments = ["Finance", "Legal", "Compliance", "Operations", "Risk Management"]
-    
-    sample_tasks = []
-    for i in range(20):
-        task_id = 1000 + i
-        company = np.random.choice(companies)
-        doc_type = np.random.choice(doc_types)
-        priority = np.random.choice(["Critical", "High", "Medium", "Low"], p=[0.1, 0.3, 0.4, 0.2])
-        
-        # Create realistic task titles
-        if doc_type in ["10-Q", "10-K"]:
-            title = f"{company} - {doc_type} Filing Review"
-        else:
-            title = f"{company} - {doc_type} Processing"
-            
-        status = np.random.choice(["New", "In Progress", "Completed", "Paused"], p=[0.3, 0.3, 0.3, 0.1])
-        
-        # Assign tasks realistically
-        if status == "New":
-            assigned_to = "Unassigned"
-        else:
-            assigned_to = np.random.choice(ANALYSTS)
-            
-        created_date = datetime.now() - timedelta(days=np.random.randint(1, 30))
-        due_date = created_date + timedelta(days=np.random.randint(1, 14))
-        
-        task = {
-            "Task ID": task_id,
-            "Title": title,
-            "Company": company,
-            "Document Type": doc_type,
-            "Priority": priority,
-            "Status": status,
-            "Assigned To": assigned_to,
-            "Created Date": created_date,
-            "Due Date": due_date,
-            "Completed Date": due_date - timedelta(days=1) if status == "Completed" else None,
-            "Department": np.random.choice(departments),
-            "Description": f"Review and process {doc_type} filing for {company}. Ensure compliance with regulatory requirements.",
-            "Source": "Manual",
-            "Attachments": []
-        }
-        sample_tasks.append(task)
-    
-    return sample_tasks
+if "tasks" in st.session_state and not isinstance(st.session_state.tasks, list):
+    st.session_state.tasks = []
+    st.session_state.next_task_id = 1001
+    st.session_state.last_assigned_task = None
 
-def create_task(task_data):
-    """Create a new task"""
+# ======================================
+# SESSION STATE INIT
+# ======================================
+
+if "tasks" not in st.session_state:
+    st.session_state.tasks = []  # list of dict
+
+if "next_task_id" not in st.session_state:
+    st.session_state.next_task_id = 1001
+
+if "current_user" not in st.session_state:
+    st.session_state.current_user = "Nisarg Thakker"
+
+if "last_assigned_task" not in st.session_state:
+    st.session_state.last_assigned_task = None
+
+if "achieved_df" not in st.session_state:
+    st.session_state.achieved_df = None
+
+if "achieved_sheet_name" not in st.session_state:
+    st.session_state.achieved_sheet_name = None
+
+
+def reset_all_tasks():
+    """Hard reset for old / demo tasks in session."""
+    st.session_state.tasks = []
+    st.session_state.next_task_id = 1001
+    st.session_state.last_assigned_task = None
+
+
+# ======================================
+# TASK HELPERS
+# ======================================
+
+def create_task(
+    title: str,
+    company: str,
+    priority: str,
+    assigned_to: str = "Unassigned",
+    status: str = "New",
+    description: str = "",
+    department: str = "Operations",
+    due_date: date | None = None,
+    source: str = "Manual",
+):
     task_id = st.session_state.next_task_id
     st.session_state.next_task_id += 1
-    
+
+    if due_date is None:
+        due_date = date.today() + timedelta(days=7)
+
     task = {
         "Task ID": task_id,
-        **task_data
+        "Title": title,
+        "Company": company,
+        "Priority": priority if priority in PRIORITIES else "Medium",
+        "Status": status if status in STATUSES else "New",
+        "Assigned To": assigned_to,
+        "Created At": datetime.now(),
+        "Due Date": due_date,
+        "Completed At": None,
+        "Description": description,
+        "Department": department,
+        "Source": source,
     }
     st.session_state.tasks.append(task)
     return task
 
-def update_task_status(task_id, new_status, assigned_to=None):
-    """Update task status and assignment"""
-    for task in st.session_state.tasks:
-        if task["Task ID"] == task_id:
-            task["Status"] = new_status
-            if assigned_to:
-                task["Assigned To"] = assigned_to
-            if new_status == "Completed":
-                task["Completed Date"] = datetime.now()
-            return True
-    return False
 
-def get_user_tasks(user_name):
-    """Get tasks assigned to specific user"""
-    return [task for task in st.session_state.tasks if task["Assigned To"] == user_name]
+def tasks_df() -> pd.DataFrame:
+    """Convert session tasks to DataFrame safely."""
+    tasks = st.session_state.tasks
+    if not isinstance(tasks, list) or len(tasks) == 0:
+        cols = [
+            "Task ID",
+            "Title",
+            "Company",
+            "Priority",
+            "Status",
+            "Assigned To",
+            "Created At",
+            "Due Date",
+            "Completed At",
+            "Description",
+            "Department",
+            "Source",
+        ]
+        return pd.DataFrame(columns=cols)
 
-def get_available_tasks():
-    """Get unassigned new tasks"""
-    return [task for task in st.session_state.tasks if task["Status"] == "New" and task["Assigned To"] == "Unassigned"]
+    df = pd.DataFrame(tasks)
+    if "Created At" in df.columns:
+        df["Created At"] = pd.to_datetime(df["Created At"], errors="coerce")
+        df = df.sort_values("Created At", ascending=False)
+    return df
 
-# ======================================
-# EMAIL INTEGRATION
-# ======================================
 
-def process_email_file(uploaded_file):
-    """Process uploaded .eml file and create task"""
-    try:
-        # For .eml processing, we'll create a simple task without full email parsing
-        task_data = {
-            "Title": f"Email Task: {uploaded_file.name}",
-            "Company": "Email Import",
-            "Document Type": "Email Processing",
-            "Priority": "Medium",
-            "Status": "New",
-            "Assigned To": "Unassigned",
-            "Created Date": datetime.now(),
-            "Due Date": datetime.now() + timedelta(days=3),
-            "Completed Date": None,
-            "Department": "Operations",
-            "Description": f"Task created from email file: {uploaded_file.name}",
-            "Source": "Email",
-            "Attachments": [{
-                "filename": uploaded_file.name,
-                "content": uploaded_file.getvalue()
-            }]
-        }
-        
-        task = create_task(task_data)
-        return task
-        
-    except Exception as e:
-        st.error(f"Error processing email: {str(e)}")
-        return None
+def available_new_tasks():
+    return [
+        t
+        for t in st.session_state.tasks
+        if t.get("Status") == "New" and t.get("Assigned To") == "Unassigned"
+    ]
+
+
+def user_tasks(user: str):
+    return [t for t in st.session_state.tasks if t.get("Assigned To") == user]
+
 
 # ======================================
-# EXCEL PROCESSING
+# IMPORT HELPERS
 # ======================================
 
-def process_task_excel(uploaded_file):
-    """Process Excel file for task creation"""
+def import_tasks_from_excel(uploaded_file) -> int:
     try:
         df = pd.read_excel(uploaded_file)
-        tasks_created = 0
-        
-        for _, row in df.iterrows():
-            # Map columns to task fields
-            title = row.get('Title') or row.get('Task Title') or f"Task from Excel {st.session_state.next_task_id}"
-            company = row.get('Company') or row.get('Company Name') or 'N/A'
-            doc_type = row.get('Document Type') or row.get('Type') or 'General'
-            priority = row.get('Priority') or 'Medium'
-            department = row.get('Department') or 'Operations'
-            
-            task_data = {
-                "Title": str(title),
-                "Company": str(company),
-                "Document Type": str(doc_type),
-                "Priority": priority,
-                "Status": "New",
-                "Assigned To": "Unassigned",
-                "Created Date": datetime.now(),
-                "Due Date": datetime.now() + timedelta(days=7),
-                "Completed Date": None,
-                "Department": str(department),
-                "Description": f"Task created from Excel import: {title}",
-                "Source": f"Excel: {uploaded_file.name}",
-                "Attachments": []
-            }
-            
-            create_task(task_data)
-            tasks_created += 1
-            
-        return tasks_created
-        
     except Exception as e:
-        st.error(f"Error processing Excel file: {str(e)}")
+        st.error(f"Error reading Excel file: {e}")
         return 0
 
-def process_analytics_excel(uploaded_file):
-    """Process Excel file for analytics dashboard"""
+    created = 0
+    for _, row in df.iterrows():
+        title = (
+            row.get("Title")
+            or row.get("Task Title")
+            or row.get("Subject")
+            or f"Imported Task {st.session_state.next_task_id}"
+        )
+        company = row.get("Company") or row.get("Company Name") or "N/A"
+        priority = row.get("Priority") or "Medium"
+        desc = row.get("Description") or ""
+        dept = row.get("Department") or "Operations"
+
+        # due date if column exists
+        due = None
+        for col in df.columns:
+            if "due" in str(col).lower():
+                try:
+                    d = pd.to_datetime(row[col], errors="coerce")
+                    if pd.notna(d):
+                        due = d.date()
+                except Exception:
+                    pass
+                break
+
+        create_task(
+            title=str(title),
+            company=str(company),
+            priority=str(priority),
+            assigned_to="Unassigned",
+            status="New",
+            description=str(desc),
+            department=str(dept),
+            due_date=due,
+            source=f"Excel:{uploaded_file.name}",
+        )
+        created += 1
+    return created
+
+
+def import_task_from_eml(eml_file) -> bool:
     try:
-        xl_file = pd.ExcelFile(uploaded_file)
-        sheet_data = {}
-        
-        for sheet_name in xl_file.sheet_names:
-            df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
-            sheet_data[sheet_name] = df
-            
-        st.session_state.analytics_data = sheet_data
+        raw_bytes = eml_file.read()
+        msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+
+        subject = msg["subject"] or "No subject"
+        sender = msg["from"] or "Unknown sender"
+        received = msg["date"]
+
+        body = ""
+        if msg.is_multipart():
+            for part in msg.walk():
+                ctype = part.get_content_type()
+                disp = str(part.get("Content-Disposition", ""))
+                if "attachment" in disp:
+                    continue
+                if ctype == "text/plain":
+                    try:
+                        body = part.get_content()
+                    except Exception:
+                        pass
+        else:
+            body = msg.get_content()
+
+        content_lower = (subject + " " + body).lower()
+        priority = "Medium"
+        if "urgent" in content_lower or "asap" in content_lower:
+            priority = "Critical"
+        elif "important" in content_lower:
+            priority = "High"
+
+        description = f"Email task from {sender}\nReceived: {received}\n\n{body[:1000]}"
+
+        create_task(
+            title=f"Email: {subject}",
+            company=f"Email from {sender}",
+            priority=priority,
+            assigned_to="Unassigned",
+            status="New",
+            description=description,
+            department="Operations",
+            source="Email",
+        )
         return True
-        
     except Exception as e:
-        st.error(f"Error processing analytics Excel: {str(e)}")
+        st.error(f"Error processing email: {e}")
         return False
 
-# ======================================
-# DASHBOARD & ANALYTICS
-# ======================================
-
-def create_analytics_dashboard(df, selected_columns):
-    """Create Power BI-like dashboard"""
-    
-    st.markdown("### 📊 Interactive Analytics Dashboard")
-    
-    # Filters
-    col1, col2, col3 = st.columns(3)
-    
-    date_columns = [col for col in selected_columns if pd.api.types.is_datetime64_any_dtype(df[col])]
-    category_columns = [col for col in selected_columns if df[col].dtype == 'object']
-    value_columns = [col for col in selected_columns if pd.api.types.is_numeric_dtype(df[col])]
-    
-    with col1:
-        if date_columns:
-            date_col = st.selectbox("Date Column", date_columns)
-        else:
-            date_col = None
-    
-    with col2:
-        if category_columns:
-            category_col = st.selectbox("Category Column", category_columns)
-        else:
-            category_col = None
-    
-    with col3:
-        if value_columns:
-            value_col = st.selectbox("Value Column", value_columns)
-        else:
-            value_col = None
-    
-    # Charts
-    if value_columns:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if category_col and value_col:
-                # Bar chart
-                chart_data = df.groupby(category_col)[value_col].sum().reset_index()
-                fig = px.bar(chart_data, x=category_col, y=value_col, 
-                           title=f"{value_col} by {category_col}")
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Pie chart
-            if category_col and len(df[category_col].unique()) <= 10:
-                pie_data = df[category_col].value_counts()
-                fig = px.pie(values=pie_data.values, names=pie_data.index,
-                           title=f"Distribution by {category_col}")
-                st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            if date_col and value_col:
-                # Time series
-                time_data = df.groupby(date_col)[value_col].sum().reset_index()
-                fig = px.line(time_data, x=date_col, y=value_col,
-                            title=f"{value_col} Trend Over Time")
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Scatter plot
-            if len(value_columns) >= 2:
-                scatter_col1, scatter_col2 = st.columns(2)
-                with scatter_col1:
-                    x_val = st.selectbox("X-Axis", value_columns, key="scatter_x")
-                with scatter_col2:
-                    y_val = st.selectbox("Y-Axis", value_columns, key="scatter_y")
-                
-                if category_columns:
-                    color_col = st.selectbox("Color by", [None] + category_columns, key="scatter_color")
-                else:
-                    color_col = None
-                    
-                fig = px.scatter(df, x=x_val, y=y_val, color=color_col,
-                               title=f"{y_val} vs {x_val}")
-                st.plotly_chart(fig, use_container_width=True)
-    
-    # Data table
-    st.markdown("### Data Preview")
-    st.dataframe(df[selected_columns].head(100), use_container_width=True)
 
 # ======================================
-# MAIN APPLICATION
+# ACHIEVED DATA HELPERS
 # ======================================
 
-def main_app():
-    """Main application after login"""
-    
-    # Header
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(f'<div class="enterprise-header"><h1 style="margin:0; color:white;">🚀 ARMS Enterprise Workflow</h1><p style="margin:0; opacity:0.9;">Welcome, {st.session_state.user_name} ({st.session_state.user_role.title()})</p></div>', unsafe_allow_html=True)
-    with col2:
-        st.write("")  # Spacer
-        if st.button("Logout"):
-            st.session_state.authenticated = False
-            st.session_state.current_user = None
-            st.session_state.user_role = None
-            st.session_state.user_name = None
-            st.rerun()
-    
-    # Initialize sample data if empty
-    if not st.session_state.tasks:
-        st.session_state.tasks = create_sample_tasks()
-        st.session_state.next_task_id = 1021
-    
-    # Navigation
-    if st.session_state.user_role == "manager":
-        tabs = st.tabs(["📋 Task Management", "📊 Analytics Dashboard", "👥 Team Management", "📁 Data Import"])
-    else:
-        tabs = st.tabs(["📋 My Tasks", "📊 Analytics", "📁 Data Import"])
-    
-    # ======================================
-    # TASK MANAGEMENT TAB
-    # ======================================
-    with tabs[0]:
-        st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-        st.header("📋 Task Management")
-        
-        # Task metrics
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        total_tasks = len(st.session_state.tasks)
-        my_tasks = len(get_user_tasks(st.session_state.user_name))
-        available_tasks = len(get_available_tasks())
-        completed_tasks = len([t for t in st.session_state.tasks if t["Status"] == "Completed"])
-        critical_tasks = len([t for t in st.session_state.tasks if t["Priority"] == "Critical"])
-        
-        with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{available_tasks}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Available Tasks</div>', unsafe_allow_html=True)
-            
-            if available_tasks > 0 and st.session_state.user_role == "analyst":
-                if st.button("Get New Task", key="get_new_btn", use_container_width=True):
-                    available = get_available_tasks()
-                    if available:
-                        task = available[0]
-                        update_task_status(task["Task ID"], "In Progress", st.session_state.user_name)
-                        st.success(f"Task #{task['Task ID']} assigned to you!")
-                        st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{my_tasks}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">My Tasks</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{total_tasks}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Total Tasks</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with col4:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{completed_tasks}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Completed</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with col5:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{critical_tasks}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Critical</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        
+def load_achieved_workbook(uploaded_file):
+    try:
+        xls = pd.ExcelFile(uploaded_file)
+        sheet = st.selectbox("Select sheet", xls.sheet_names, key="achieved_sheet_select")
+        df = pd.read_excel(xls, sheet_name=sheet)
+        st.session_state.achieved_df = df
+        st.session_state.achieved_sheet_name = sheet
+        st.success(f"Loaded sheet '{sheet}' with {len(df)} rows.")
+    except Exception as e:
+        st.error(f"Error loading workbook: {e}")
+
+
+# ======================================
+# UI: HEADER + USER
+# ======================================
+
+st.markdown(
+    '<div class="main-header">🚀 ARMS Workflow Management System</div>',
+    unsafe_allow_html=True,
+)
+
+col_user_1, col_user_2 = st.columns([0.7, 0.3])
+
+with col_user_1:
+    if st.button("🧹 Reset all tasks (clear old data)"):
+        reset_all_tasks()
+        st.success("All tasks cleared. Start fresh by importing Excel / emails or creating tasks.")
+        st.experimental_rerun()
+
+with col_user_2:
+    # Fixed current user as Nisarg for now.
+    st.write("Analyst: **Nisarg Thakker**")
+    st.session_state.current_user = "Nisarg Thakker"
+
+# ======================================
+# TABS
+# ======================================
+
+tab_tasks, tab_analytics, tab_import, tab_team, tab_achieved = st.tabs(
+    ["📋 Task Management", "📊 Analytics", "📁 Data Import", "👥 Team Metrics", "📈 Achieved Data / ARMS Excel"]
+)
+
+# ======================================
+# TAB: TASK MANAGEMENT
+# ======================================
+
+with tab_tasks:
+    df_all = tasks_df()
+    my_tasks = user_tasks(st.session_state.current_user)
+    new_avail = available_new_tasks()
+
+    # Top cards
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">Get New Task</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-value">{len(new_avail)}</div>', unsafe_allow_html=True)
+        get_new_clicked = st.button("🚀 Get New Task", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Task creation for managers
-        if st.session_state.user_role == "manager":
-            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-            st.subheader("Create New Task")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                title = st.text_input("Task Title")
+    with c2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">My Tasks</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-value">{len(my_tasks)}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">Total Tasks</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-value">{len(df_all)}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with c4:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">Create Task</div>', unsafe_allow_html=True)
+        create_clicked = st.button("➕ New Task", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Get New Task logic
+    if get_new_clicked:
+        if new_avail:
+            t = new_avail[0]
+            t["Assigned To"] = st.session_state.current_user
+            t["Status"] = "In Progress"
+            st.session_state.last_assigned_task = t
+            st.success(f"Assigned Task #{t.get('Task ID')} to you.")
+        else:
+            st.info("No new unassigned tasks available.")
+
+    # Last assigned summary
+    if st.session_state.last_assigned_task:
+        t = st.session_state.last_assigned_task
+        st.markdown("### Last Assigned Task Summary")
+        with st.expander(f"Task #{t.get('Task ID')} – {t.get('Title', '')}", expanded=True):
+            st.write(f"**Company:** {t.get('Company', 'N/A')}")
+            st.write(f"**Priority:** {t.get('Priority', 'N/A')}")
+            st.write(f"**Status:** {t.get('Status', 'N/A')}")
+            st.write(f"**Assigned To:** {t.get('Assigned To', 'N/A')}")
+            st.write(f"**Created At:** {t.get('Created At', 'N/A')}")
+            st.write(f"**Due Date:** {t.get('Due Date', 'N/A')}")
+            st.write(f"**Source:** {t.get('Source', 'N/A')}")
+            st.write("**Description:**")
+            st.write(t.get("Description", ""))
+
+    # Create Task form
+    if create_clicked:
+        st.markdown("### Create Task")
+        with st.form("create_task_form"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                title = st.text_input("Title")
                 company = st.text_input("Company Name")
-                doc_type = st.selectbox("Document Type", ["10-Q", "10-K", "8-K", "Annual Report", "Filing", "Review"])
-                priority = st.selectbox("Priority", ["Critical", "High", "Medium", "Low"])
-                
-            with col2:
+                priority = st.selectbox("Priority", PRIORITIES, index=1)
+                department = st.selectbox("Department", ["Finance", "Legal", "Compliance", "Operations", "Risk"])
+            with col_b:
                 assigned_to = st.selectbox("Assign To", ["Unassigned"] + ANALYSTS)
-                department = st.selectbox("Department", ["Finance", "Legal", "Compliance", "Operations", "Risk Management"])
-                due_date = st.date_input("Due Date", value=date.today() + timedelta(days=7))
-                
-            description = st.text_area("Description", height=100)
-            
-            if st.button("Create Task", type="primary"):
-                if title:
-                    task_data = {
-                        "Title": title,
-                        "Company": company,
-                        "Document Type": doc_type,
-                        "Priority": priority,
-                        "Status": "New" if assigned_to == "Unassigned" else "In Progress",
-                        "Assigned To": assigned_to,
-                        "Created Date": datetime.now(),
-                        "Due Date": due_date,
-                        "Completed Date": None,
-                        "Department": department,
-                        "Description": description,
-                        "Source": "Manual",
-                        "Attachments": []
-                    }
-                    
-                    task = create_task(task_data)
-                    st.success(f"Task #{task['Task ID']} created successfully!")
-                    st.rerun()
+                due = st.date_input("Due Date", value=date.today() + timedelta(days=7))
+                status = "New" if assigned_to == "Unassigned" else "In Progress"
+            description = st.text_area("Description", height=120)
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                submit_new = st.form_submit_button("Save Task", type="primary")
+            with col_b2:
+                cancel_new = st.form_submit_button("Cancel")
+
+            if submit_new:
+                if not title:
+                    st.error("Title is required.")
                 else:
-                    st.error("Please enter a task title")
-                    
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Task list
-        st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-        st.subheader("Task List")
-        
-        # Filters
-        col1, col2, col3, col4 = st.columns(4)
+                    t = create_task(
+                        title=title,
+                        company=company or "N/A",
+                        priority=priority,
+                        assigned_to=assigned_to,
+                        status=status,
+                        description=description,
+                        department=department,
+                        due_date=due,
+                        source="Manual",
+                    )
+                    st.success(f"Created Task #{t.get('Task ID')}.")
+                    st.session_state.last_assigned_task = t
+            if cancel_new:
+                st.experimental_rerun()
+
+    st.markdown("---")
+
+    # View selection
+    view_mode = st.radio(
+        "View",
+        ["My Tasks", "Available (New & Unassigned)", "All Tasks"],
+        horizontal=True,
+    )
+
+    if view_mode == "My Tasks":
+        show_tasks = my_tasks
+    elif view_mode == "Available (New & Unassigned)":
+        show_tasks = new_avail
+    else:
+        show_tasks = st.session_state.tasks
+
+    # Simple search filter
+    search_text = st.text_input("Search (title / company contains):", "").strip().lower()
+    if search_text:
+        show_tasks = [
+            t for t in show_tasks
+            if search_text in str(t.get("Title", "")).lower()
+            or search_text in str(t.get("Company", "")).lower()
+        ]
+
+    if not show_tasks:
+        st.info("No tasks to show.")
+    else:
+        st.markdown("### Tasks")
+        # sort by due date then priority, safely
+        show_tasks_sorted = sorted(
+            show_tasks,
+            key=lambda t: (
+                t.get("Due Date", date.today()),
+                PRIORITIES.index(t.get("Priority")) if t.get("Priority") in PRIORITIES else 99,
+            ),
+        )
+
+        for t in show_tasks_sorted[:50]:
+            with st.container():
+                c1, c2, c3, c4 = st.columns([3, 2, 1.3, 1.3])
+
+                created_at = t.get("Created At")
+                if isinstance(created_at, (datetime, pd.Timestamp)):
+                    created_str = created_at.strftime("%Y-%m-%d")
+                else:
+                    created_str = str(created_at)
+
+                due_val = t.get("Due Date")
+                if isinstance(due_val, pd.Timestamp):
+                    due_val = due_val.date()
+                if isinstance(due_val, (datetime, date)):
+                    due_str = due_val.isoformat()
+                else:
+                    due_str = str(due_val)
+
+                with c1:
+                    st.write(f"**#{t.get('Task ID')} – {t.get('Title', '')}**")
+                    st.caption(
+                        f"{t.get('Company', 'N/A')} | {t.get('Department', 'N/A')} | Source: {t.get('Source', 'N/A')}"
+                    )
+                with c2:
+                    st.write(f"Assigned: {t.get('Assigned To', 'N/A')}")
+                    st.write(f"Created: {created_str}")
+                    st.write(f"Due: {due_str}")
+                with c3:
+                    status_val = t.get("Status", "New")
+                    st.markdown(
+                        f"<span class='status-badge status-{status_val.replace(' ', '\\ ')}'>{status_val}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    priority_val = t.get("Priority", "Medium")
+                    st.markdown(
+                        f"<span class='status-badge priority-{priority_val}'>{priority_val}</span>",
+                        unsafe_allow_html=True,
+                    )
+                with c4:
+                    # Accept / Pause / Resume / Complete buttons
+                    if t.get("Status") == "New" and t.get("Assigned To") == "Unassigned":
+                        if st.button("Accept", key=f"accept_{t.get('Task ID')}"):
+                            t["Assigned To"] = st.session_state.current_user
+                            t["Status"] = "In Progress"
+                            st.session_state.last_assigned_task = t
+                            st.experimental_rerun()
+                    elif t.get("Assigned To") == st.session_state.current_user:
+                        if t.get("Status") == "In Progress":
+                            if st.button("Pause", key=f"pause_{t.get('Task ID')}"):
+                                t["Status"] = "Paused"
+                                st.experimental_rerun()
+                        elif t.get("Status") == "Paused":
+                            if st.button("Resume", key=f"resume_{t.get('Task ID')}"):
+                                t["Status"] = "In Progress"
+                                st.experimental_rerun()
+                        if t.get("Status") != "Completed":
+                            if st.button("Complete", key=f"complete_{t.get('Task ID')}"):
+                                t["Status"] = "Completed"
+                                t["Completed At"] = datetime.now()
+                                st.experimental_rerun()
+
+                with st.expander(f"Details for Task #{t.get('Task ID')}"):
+                    st.write(f"**Title:** {t.get('Title', '')}")
+                    st.write(f"**Company:** {t.get('Company', 'N/A')}")
+                    st.write(f"**Priority:** {t.get('Priority', 'N/A')}")
+                    st.write(f"**Status:** {t.get('Status', 'N/A')}")
+                    st.write(f"**Assigned To:** {t.get('Assigned To', 'N/A')}")
+                    st.write(f"**Created At:** {t.get('Created At', 'N/A')}")
+                    st.write(f"**Due Date:** {t.get('Due Date', 'N/A')}")
+                    st.write(f"**Completed At:** {t.get('Completed At', 'N/A')}")
+                    st.write(f"**Department:** {t.get('Department', 'N/A')}")
+                    st.write(f"**Source:** {t.get('Source', 'N/A')}")
+                    st.write("**Description:**")
+                    st.write(t.get("Description", ""))
+                st.markdown("---")
+
+# ======================================
+# TAB: DATA IMPORT
+# ======================================
+
+with tab_import:
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Email (.eml) Import")
+    eml_files = st.file_uploader(
+        "Upload .eml files", type=["eml"], accept_multiple_files=True, key="eml_uploader"
+    )
+    if eml_files:
+        if st.button("Process Emails", type="primary"):
+            ok = 0
+            for f in eml_files:
+                if import_task_from_eml(f):
+                    ok += 1
+            st.success(f"Created {ok} tasks from {len(eml_files)} emails.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Excel Task Import")
+    excel_file = st.file_uploader(
+        "Upload Excel file for tasks", type=["xlsx", "xls"], key="excel_uploader"
+    )
+    if excel_file:
+        try:
+            preview_df = pd.read_excel(excel_file)
+            st.write("Preview of uploaded file:")
+            st.dataframe(preview_df.head(), use_container_width=True)
+        except Exception as e:
+            st.error(f"Could not preview file: {e}")
+
+        if st.button("Create Tasks from Excel", type="primary"):
+            n = import_tasks_from_excel(excel_file)
+            st.success(f"Created {n} tasks from Excel.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================
+# TAB: ANALYTICS (TASKS)
+# ======================================
+
+with tab_analytics:
+    df = tasks_df()
+    if df.empty:
+        st.info("No tasks yet. Import or create tasks first.")
+    else:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Key Metrics")
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+        total = len(df)
+        completed = len(df[df["Status"] == "Completed"])
+        in_prog = len(df[df["Status"] == "In Progress"])
+        high = len(df[df["Priority"].isin(["Critical", "High"])])
+
+        # robust overdue calc
+        if "Due Date" in df.columns:
+            due_series = pd.to_datetime(df["Due Date"], errors="coerce")
+            overdue = len(
+                df[(df["Status"] != "Completed") & (due_series.dt.date < date.today())]
+            )
+        else:
+            overdue = 0
+
         with col1:
-            view_filter = st.selectbox("View", ["All Tasks", "My Tasks", "Available Tasks", "Completed"])
+            st.metric("Total Tasks", total)
         with col2:
-            status_filter = st.multiselect("Status", ["New", "In Progress", "Completed", "Paused"], default=["New", "In Progress"])
+            st.metric("Completed", completed)
         with col3:
-            priority_filter = st.multiselect("Priority", ["Critical", "High", "Medium", "Low"], default=["Critical", "High", "Medium", "Low"])
+            st.metric("In Progress", in_prog)
         with col4:
-            department_filter = st.multiselect("Department", ["Finance", "Legal", "Compliance", "Operations", "Risk Management"])
-        
-        # Filter tasks
-        filtered_tasks = st.session_state.tasks.copy()
-        
-        if view_filter == "My Tasks":
-            filtered_tasks = get_user_tasks(st.session_state.user_name)
-        elif view_filter == "Available Tasks":
-            filtered_tasks = get_available_tasks()
-        elif view_filter == "Completed":
-            filtered_tasks = [t for t in filtered_tasks if t["Status"] == "Completed"]
-            
-        filtered_tasks = [t for t in filtered_tasks if t["Status"] in status_filter and t["Priority"] in priority_filter]
-        if department_filter:
-            filtered_tasks = [t for t in filtered_tasks if t["Department"] in department_filter]
-        
-        # Display tasks
-        if not filtered_tasks:
-            st.info("No tasks match the current filters.")
-        else:
-            for task in filtered_tasks:
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
-                    
-                    with col1:
-                        st.write(f"**#{task['Task ID']} - {task['Title']}**")
-                        st.caption(f"{task['Company']} | {task['Document Type']} | {task['Department']}")
-                        
-                    with col2:
-                        st.write(f"**Assigned:** {task['Assigned To']}")
-                        st.write(f"**Due:** {task['Due Date'].strftime('%Y-%m-%d')}")
-                        
-                    with col3:
-                        status_class = task['Status'].lower().replace(' ', '-')
-                        st.markdown(f'<span class="status-badge status-{status_class}">{task["Status"]}</span>', unsafe_allow_html=True)
-                        priority_class = task['Priority'].lower()
-                        st.markdown(f'<span class="status-badge priority-{priority_class}">{task["Priority"]}</span>', unsafe_allow_html=True)
-                        
-                    with col4:
-                        # Action buttons
-                        if task["Status"] == "New" and task["Assigned To"] == "Unassigned":
-                            if st.button("Accept", key=f"accept_{task['Task ID']}"):
-                                update_task_status(task["Task ID"], "In Progress", st.session_state.user_name)
-                                st.rerun()
-                                
-                        elif task["Assigned To"] == st.session_state.user_name:
-                            if task["Status"] == "In Progress":
-                                col4a, col4b = st.columns(2)
-                                with col4a:
-                                    if st.button("Pause", key=f"pause_{task['Task ID']}"):
-                                        update_task_status(task["Task ID"], "Paused")
-                                        st.rerun()
-                                with col4b:
-                                    if st.button("Complete", key=f"complete_{task['Task ID']}"):
-                                        update_task_status(task["Task ID"], "Completed")
-                                        st.rerun()
-                                        
-                            elif task["Status"] == "Paused":
-                                if st.button("Resume", key=f"resume_{task['Task ID']}"):
-                                    update_task_status(task["Task ID"], "In Progress")
-                                    st.rerun()
-                    
-                    with st.expander(f"Task Details #{task['Task ID']}"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write(f"**Company:** {task['Company']}")
-                            st.write(f"**Document Type:** {task['Document Type']}")
-                            st.write(f"**Priority:** {task['Priority']}")
-                            st.write(f"**Status:** {task['Status']}")
-                        with col2:
-                            st.write(f"**Assigned To:** {task['Assigned To']}")
-                            st.write(f"**Created:** {task['Created Date'].strftime('%Y-%m-%d %H:%M')}")
-                            st.write(f"**Due Date:** {task['Due Date'].strftime('%Y-%m-%d')}")
-                            if task['Completed Date']:
-                                st.write(f"**Completed:** {task['Completed Date'].strftime('%Y-%m-%d %H:%M')}")
-                        
-                        st.write("**Description:**")
-                        st.write(task['Description'])
-                        
-                        # Show attachments if any
-                        if task.get('Attachments'):
-                            st.write("**Attachments:**")
-                            for att in task['Attachments']:
-                                st.download_button(
-                                    label=f"📎 {att['filename']}",
-                                    data=att['content'],
-                                    file_name=att['filename'],
-                                    key=f"att_{task['Task ID']}_{att['filename']}"
-                                )
-                    
-                    st.markdown("---")
-        
+            st.metric("High / Critical", high)
+        with col5:
+            st.metric("Overdue", overdue)
         st.markdown("</div>", unsafe_allow_html=True)
-    
-    # ======================================
-    # ANALYTICS TAB
-    # ======================================
-    with tabs[1]:
-        st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-        st.header("📊 Analytics Dashboard")
-        
-        # Upload analytics data
-        st.subheader("Upload Analytics Data")
-        analytics_file = st.file_uploader("Upload Excel file for analytics", type=["xlsx", "xls"], key="analytics_upload")
-        
-        if analytics_file:
-            if st.button("Process Analytics Data"):
-                if process_analytics_excel(analytics_file):
-                    st.success("Analytics data loaded successfully!")
-                else:
-                    st.error("Failed to load analytics data")
-        
-        # Sheet selection
-        if st.session_state.analytics_data:
-            st.subheader("Data Selection")
-            sheet_names = list(st.session_state.analytics_data.keys())
-            selected_sheet = st.selectbox("Select Sheet", sheet_names)
-            
-            if selected_sheet:
-                df = st.session_state.analytics_data[selected_sheet]
-                st.session_state.current_sheet = selected_sheet
-                
-                # Column selection
-                st.subheader("Configure Dashboard")
-                available_columns = df.columns.tolist()
-                selected_columns = st.multiselect("Select Columns for Analysis", available_columns, default=available_columns[:min(5, len(available_columns))])
-                
-                if selected_columns:
-                    create_analytics_dashboard(df[selected_columns], selected_columns)
-        else:
-            st.info("Please upload an Excel file with analytics data to get started.")
-            
+
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Distributions")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("Status Distribution")
+            st.bar_chart(df["Status"].value_counts())
+        with col2:
+            st.write("Priority Distribution")
+            st.bar_chart(df["Priority"].value_counts())
         st.markdown("</div>", unsafe_allow_html=True)
-    
-    # ======================================
-    # TEAM MANAGEMENT TAB (For managers) / DATA IMPORT (For analysts)
-    # ======================================
-    with tabs[2]:
-        if st.session_state.user_role == "manager":
-            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-            st.header("👥 Team Management")
-            
-            # Team performance metrics
-            team_performance = []
-            for analyst in ANALYSTS:
-                analyst_tasks = get_user_tasks(analyst)
-                total = len(analyst_tasks)
-                completed = len([t for t in analyst_tasks if t["Status"] == "Completed"])
-                in_progress = len([t for t in analyst_tasks if t["Status"] == "In Progress"])
-                overdue = len([t for t in analyst_tasks if t["Status"] != "Completed" and t["Due Date"] < datetime.now()])
-                
-                team_performance.append({
-                    "Analyst": analyst,
+
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Tasks by Analyst")
+        by_user = df.groupby("Assigned To")["Task ID"].count().sort_values(ascending=False)
+        st.bar_chart(by_user)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================
+# TAB: TEAM METRICS
+# ======================================
+
+with tab_team:
+    df = tasks_df()
+    if df.empty:
+        st.info("No tasks yet.")
+    else:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Per-Analyst Summary")
+
+        rows = []
+        for a in ANALYSTS:
+            adf = df[df["Assigned To"] == a]
+            if adf.empty:
+                continue
+            total = len(adf)
+            completed = len(adf[adf["Status"] == "Completed"])
+            in_prog = len(adf[adf["Status"] == "In Progress"])
+            high = len(adf[adf["Priority"].isin(["Critical", "High"])])
+            rows.append(
+                {
+                    "Analyst": a,
                     "Total Tasks": total,
                     "Completed": completed,
-                    "In Progress": in_progress,
-                    "Overdue": overdue,
-                    "Completion Rate": f"{(completed/total*100):.1f}%" if total > 0 else "0%"
-                })
-            
-            performance_df = pd.DataFrame(team_performance)
-            st.dataframe(performance_df, use_container_width=True)
-            
-            # Team charts
+                    "In Progress": in_prog,
+                    "High/Critical": high,
+                    "Completion %": round(completed / total * 100, 1) if total else 0.0,
+                }
+            )
+        team_df = pd.DataFrame(rows)
+        st.dataframe(team_df, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================
+# TAB: ACHIEVED / ARMS EXCEL
+# ======================================
+
+with tab_achieved:
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Upload ARMS / Achieved Excel")
+
+    achieved_file = st.file_uploader(
+        "Upload ARMS Data workbook", type=["xlsx", "xls"], key="achieved_uploader"
+    )
+    if achieved_file:
+        load_achieved_workbook(achieved_file)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    df = st.session_state.achieved_df
+    if df is None:
+        st.info("Upload your ARMS Excel to explore achieved / workflow data.")
+    else:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader(f"Sheet: {st.session_state.achieved_sheet_name}")
+        st.dataframe(df.head(50), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # detect columns
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        datetime_cols = df.select_dtypes(include="datetime").columns.tolist()
+        # also treat columns with date/month in name as date-like
+        for c in df.columns:
+            cl = str(c).lower()
+            if ("date" in cl or "month" in cl) and c not in datetime_cols:
+                try:
+                    df[c] = pd.to_datetime(df[c], errors="coerce")
+                    datetime_cols.append(c)
+                except Exception:
+                    pass
+
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Quick KPI & Trend")
+
+        if not numeric_cols:
+            st.info("No numeric columns detected – cannot build KPIs.")
+        else:
+            metric_col = st.selectbox("Metric column", numeric_cols, key="metric_col")
+            if datetime_cols:
+                date_col = st.selectbox(
+                    "Date column (optional)", ["(none)"] + datetime_cols, key="date_col"
+                )
+            else:
+                date_col = "(none)"
+
             col1, col2 = st.columns(2)
             with col1:
-                fig = px.bar(performance_df, x='Analyst', y='Completed', title='Tasks Completed by Analyst')
-                st.plotly_chart(fig, use_container_width=True)
+                st.metric("Total", f"{df[metric_col].sum():,.1f}")
             with col2:
-                fig = px.pie(performance_df, values='Total Tasks', names='Analyst', title='Task Distribution')
-                st.plotly_chart(fig, use_container_width=True)
-                
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        else:
-            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-            st.header("📁 Data Import")
-            
-            # Email import
-            st.subheader("📧 Email Import")
-            eml_files = st.file_uploader("Upload .eml files", type=["eml"], accept_multiple_files=True, key="email_import")
-            
-            if eml_files:
-                if st.button("Process Emails", type="primary"):
-                    processed = 0
-                    for eml_file in eml_files:
-                        task = process_email_file(eml_file)
-                        if task:
-                            processed += 1
-                            st.success(f"Created task #{task['Task ID']} from {eml_file.name}")
-                    
-                    st.success(f"Processed {processed} email(s) successfully!")
-            
-            # Excel task import
-            st.subheader("📊 Excel Task Import")
-            task_excel = st.file_uploader("Upload Excel for task creation", type=["xlsx", "xls"], key="task_excel")
-            
-            if task_excel:
-                if st.button("Create Tasks from Excel", type="primary"):
-                    tasks_created = process_task_excel(task_excel)
-                    st.success(f"Created {tasks_created} tasks from Excel file!")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-    
-    # ======================================
-    # DATA IMPORT TAB (For managers)
-    # ======================================
-    if st.session_state.user_role == "manager" and len(tabs) > 3:
-        with tabs[3]:
-            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
-            st.header("📁 Data Import")
-            
-            # Email import
-            st.subheader("📧 Email Import")
-            eml_files = st.file_uploader("Upload .eml files", type=["eml"], accept_multiple_files=True, key="manager_email_import")
-            
-            if eml_files:
-                if st.button("Process Emails", type="primary", key="manager_email_btn"):
-                    processed = 0
-                    for eml_file in eml_files:
-                        task = process_email_file(eml_file)
-                        if task:
-                            processed += 1
-                            st.success(f"Created task #{task['Task ID']} from {eml_file.name}")
-                    
-                    st.success(f"Processed {processed} email(s) successfully!")
-            
-            # Excel task import
-            st.subheader("📊 Excel Task Import")
-            task_excel = st.file_uploader("Upload Excel for task creation", type=["xlsx", "xls"], key="manager_task_excel")
-            
-            if task_excel:
-                if st.button("Create Tasks from Excel", type="primary", key="manager_excel_btn"):
-                    tasks_created = process_task_excel(task_excel)
-                    st.success(f"Created {tasks_created} tasks from Excel file!")
-            
+                st.metric("Average", f"{df[metric_col].mean():,.1f}")
+
+            if date_col != "(none)":
+                ddf = df.dropna(subset=[date_col])
+                ddf = ddf.sort_values(date_col)
+                ts = ddf.groupby(ddf[date_col].dt.date)[metric_col].sum()
+                st.line_chart(ts)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # category distribution
+        cat_cols = [c for c in df.columns if df[c].dtype == "object"]
+        if cat_cols and numeric_cols:
+            st.markdown('<div class="section-card">', unsafe_allow_html=True)
+            st.subheader("Category Breakdown")
+            cat_col = st.selectbox("Group by", cat_cols, key="cat_col")
+            metric_col2 = st.selectbox("Value", numeric_cols, key="metric_col2")
+            agg = df.groupby(cat_col)[metric_col2].sum().sort_values(ascending=False)
+            st.bar_chart(agg)
             st.markdown("</div>", unsafe_allow_html=True)
 
-# ======================================
-# MAIN EXECUTION
-# ======================================
-
-def main():
-    initialize_session_state()
-    
-    if not st.session_state.authenticated:
-        login_page()
-    else:
-        main_app()
-
-if __name__ == "__main__":
-    main()
+        # explorer + export
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Data Explorer & Export")
+        st.dataframe(df, use_container_width=True)
+        csv = df.to_csv(index=False)
+        st.download_button(
+            "Download full sheet as CSV",
+            data=csv,
+            file_name="arms_achieved_export.csv",
+            mime="text/csv",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
