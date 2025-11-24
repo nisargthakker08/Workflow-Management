@@ -122,7 +122,6 @@ PRIORITIES = ["Critical", "High", "Medium", "Low"]
 
 # ======================================
 # SAFETY: RESET BROKEN TASK STATE
-# (if an old version stored a DataFrame instead of list)
 # ======================================
 
 if "tasks" in st.session_state and not isinstance(st.session_state.tasks, list):
@@ -369,10 +368,9 @@ with col_user_1:
     if st.button("🧹 Reset all tasks (clear old data)"):
         reset_all_tasks()
         st.success("All tasks cleared. Start fresh by importing Excel / emails or creating tasks.")
-        st.experimental_rerun()
+        st.rerun()
 
 with col_user_2:
-    # Fixed current user as Nisarg for now.
     st.write("Analyst: **Nisarg Thakker**")
     st.session_state.current_user = "Nisarg Thakker"
 
@@ -482,7 +480,7 @@ with tab_tasks:
                     st.success(f"Created Task #{t.get('Task ID')}.")
                     st.session_state.last_assigned_task = t
             if cancel_new:
-                st.experimental_rerun()
+                st.rerun()
 
     st.markdown("---")
 
@@ -567,21 +565,21 @@ with tab_tasks:
                             t["Assigned To"] = st.session_state.current_user
                             t["Status"] = "In Progress"
                             st.session_state.last_assigned_task = t
-                            st.experimental_rerun()
+                            st.rerun()
                     elif t.get("Assigned To") == st.session_state.current_user:
                         if t.get("Status") == "In Progress":
                             if st.button("Pause", key=f"pause_{t.get('Task ID')}"):
                                 t["Status"] = "Paused"
-                                st.experimental_rerun()
+                                st.rerun()
                         elif t.get("Status") == "Paused":
                             if st.button("Resume", key=f"resume_{t.get('Task ID')}"):
                                 t["Status"] = "In Progress"
-                                st.experimental_rerun()
+                                st.rerun()
                         if t.get("Status") != "Completed":
                             if st.button("Complete", key=f"complete_{t.get('Task ID')}"):
                                 t["Status"] = "Completed"
                                 t["Completed At"] = datetime.now()
-                                st.experimental_rerun()
+                                st.rerun()
 
                 with st.expander(f"Details for Task #{t.get('Task ID')}"):
                     st.write(f"**Title:** {t.get('Title', '')}")
@@ -653,7 +651,6 @@ with tab_analytics:
         in_prog = len(df[df["Status"] == "In Progress"])
         high = len(df[df["Priority"].isin(["Critical", "High"])])
 
-        # robust overdue calc
         if "Due Date" in df.columns:
             due_series = pd.to_datetime(df["Due Date"], errors="coerce")
             overdue = len(
@@ -711,7 +708,8 @@ with tab_team:
             total = len(adf)
             completed = len(adf[adf["Status"] == "Completed"])
             in_prog = len(adf[adf["Status"] == "In Progress"])
-            high = len(adf[adf["Priority"].isin(["Critical", "High"])])
+            high = len(adf[adf["Priority"].isin(["Critical", "High"])]
+                       )
             rows.append(
                 {
                     "Analyst": a,
@@ -753,7 +751,6 @@ with tab_achieved:
         # detect columns
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         datetime_cols = df.select_dtypes(include="datetime").columns.tolist()
-        # also treat columns with date/month in name as date-like
         for c in df.columns:
             cl = str(c).lower()
             if ("date" in cl or "month" in cl) and c not in datetime_cols:
@@ -790,7 +787,6 @@ with tab_achieved:
                 st.line_chart(ts)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # category distribution
         cat_cols = [c for c in df.columns if df[c].dtype == "object"]
         if cat_cols and numeric_cols:
             st.markdown('<div class="section-card">', unsafe_allow_html=True)
@@ -801,7 +797,6 @@ with tab_achieved:
             st.bar_chart(agg)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # explorer + export
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.subheader("Data Explorer & Export")
         st.dataframe(df, use_container_width=True)
