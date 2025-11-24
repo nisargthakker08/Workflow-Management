@@ -6,11 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import base64
 import io
-import smtplib
-import imaplib
-import email
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
 import time
 import hashlib
 import json
@@ -165,6 +160,8 @@ def initialize_session_state():
         st.session_state.current_user = None
     if "user_role" not in st.session_state:
         st.session_state.user_role = None
+    if "user_name" not in st.session_state:
+        st.session_state.user_name = None
         
     # Task management
     if "tasks" not in st.session_state:
@@ -196,8 +193,9 @@ def login_page():
                     user = authenticate(username, password)
                     if user:
                         st.session_state.authenticated = True
-                        st.session_state.current_user = user["name"]
+                        st.session_state.current_user = username
                         st.session_state.user_role = user["role"]
+                        st.session_state.user_name = user["name"]
                         st.success(f"Welcome {user['name']}!")
                         st.rerun()
                     else:
@@ -306,76 +304,32 @@ def get_available_tasks():
 def process_email_file(uploaded_file):
     """Process uploaded .eml file and create task"""
     try:
-        # Read email content
-        email_content = uploaded_file.read().decode('utf-8')
-        msg = email.message_from_string(email_content)
-        
-        # Extract email details
-        subject = msg.get('subject', 'No Subject')
-        sender = msg.get('from', 'Unknown Sender')
-        date_received = msg.get('date', '')
-        
-        # Extract body
-        body = ""
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                content_disposition = str(part.get("Content-Disposition"))
-                
-                if content_type == "text/plain" and "attachment" not in content_disposition:
-                    body = part.get_payload(decode=True).decode()
-                    break
-        else:
-            body = msg.get_payload(decode=True).decode()
-        
-        # Extract attachments
-        attachments = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_maintype() == 'multipart':
-                    continue
-                if part.get('Content-Disposition') is None:
-                    continue
-                
-                filename = part.get_filename()
-                if filename:
-                    attachments.append({
-                        "filename": filename,
-                        "content": part.get_payload(decode=True)
-                    })
-        
-        # Determine priority based on content
-        content_lower = (subject + " " + body).lower()
-        if any(word in content_lower for word in ['urgent', 'asap', 'critical']):
-            priority = "Critical"
-        elif any(word in content_lower for word in ['important', 'priority']):
-            priority = "High"
-        else:
-            priority = "Medium"
-        
-        # Create task from email
+        # For .eml processing, we'll create a simple task without full email parsing
         task_data = {
-            "Title": f"Email: {subject}",
-            "Company": f"Email from {sender}",
+            "Title": f"Email Task: {uploaded_file.name}",
+            "Company": "Email Import",
             "Document Type": "Email Processing",
-            "Priority": priority,
+            "Priority": "Medium",
             "Status": "New",
             "Assigned To": "Unassigned",
             "Created Date": datetime.now(),
             "Due Date": datetime.now() + timedelta(days=3),
             "Completed Date": None,
             "Department": "Operations",
-            "Description": f"Email received from {sender} on {date_received}\n\nSubject: {subject}\n\nBody:\n{body[:1000]}",
+            "Description": f"Task created from email file: {uploaded_file.name}",
             "Source": "Email",
-            "Attachments": attachments
+            "Attachments": [{
+                "filename": uploaded_file.name,
+                "content": uploaded_file.getvalue()
+            }]
         }
         
         task = create_task(task_data)
-        return task, attachments
+        return task
         
     except Exception as e:
         st.error(f"Error processing email: {str(e)}")
-        return None, []
+        return None
 
 # ======================================
 # EXCEL PROCESSING
@@ -449,27 +403,34 @@ def create_analytics_dashboard(df, selected_columns):
     # Filters
     col1, col2, col3 = st.columns(3)
     
+    date_columns = [col for col in selected_columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+    category_columns = [col for col in selected_columns if df[col].dtype == 'object']
+    value_columns = [col for col in selected_columns if pd.api.types.is_numeric_dtype(df[col])]
+    
     with col1:
-        date_columns = [col for col in selected_columns if df[col].dtype == 'datetime64[ns]']
         if date_columns:
             date_col = st.selectbox("Date Column", date_columns)
+        else:
+            date_col = None
     
     with col2:
-        category_columns = [col for col in selected_columns if df[col].dtype == 'object']
         if category_columns:
             category_col = st.selectbox("Category Column", category_columns)
+        else:
+            category_col = None
     
     with col3:
-        value_columns = [col for col in selected_columns if df[col].dtype in ['int64', 'float64']]
         if value_columns:
             value_col = st.selectbox("Value Column", value_columns)
+        else:
+            value_col = None
     
     # Charts
     if value_columns:
         col1, col2 = st.columns(2)
         
         with col1:
-            if category_columns:
+            if category_col and value_col:
                 # Bar chart
                 chart_data = df.groupby(category_col)[value_col].sum().reset_index()
                 fig = px.bar(chart_data, x=category_col, y=value_col, 
@@ -477,14 +438,14 @@ def create_analytics_dashboard(df, selected_columns):
                 st.plotly_chart(fig, use_container_width=True)
             
             # Pie chart
-            if category_columns and len(df[category_col].unique()) <= 10:
+            if category_col and len(df[category_col].unique()) <= 10:
                 pie_data = df[category_col].value_counts()
                 fig = px.pie(values=pie_data.values, names=pie_data.index,
                            title=f"Distribution by {category_col}")
                 st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            if date_columns and value_columns:
+            if date_col and value_col:
                 # Time series
                 time_data = df.groupby(date_col)[value_col].sum().reset_index()
                 fig = px.line(time_data, x=date_col, y=value_col,
@@ -493,10 +454,14 @@ def create_analytics_dashboard(df, selected_columns):
             
             # Scatter plot
             if len(value_columns) >= 2:
-                x_val = st.selectbox("X-Axis", value_columns, key="scatter_x")
-                y_val = st.selectbox("Y-Axis", value_columns, key="scatter_y")
+                scatter_col1, scatter_col2 = st.columns(2)
+                with scatter_col1:
+                    x_val = st.selectbox("X-Axis", value_columns, key="scatter_x")
+                with scatter_col2:
+                    y_val = st.selectbox("Y-Axis", value_columns, key="scatter_y")
+                
                 if category_columns:
-                    color_col = st.selectbox("Color by", [None] + category_columns)
+                    color_col = st.selectbox("Color by", [None] + category_columns, key="scatter_color")
                 else:
                     color_col = None
                     
@@ -516,20 +481,17 @@ def main_app():
     """Main application after login"""
     
     # Header
-    st.markdown(f"""
-    <div class="enterprise-header">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h1 style="margin:0; color:white;">🚀 ARMS Enterprise Workflow</h1>
-                <p style="margin:0; opacity:0.9;">Welcome, {st.session_state.current_user} ({st.session_state.user_role.title()})</p>
-            </div>
-            <div style="text-align: right;">
-                <p style="margin:0; opacity:0.9;">{datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-                <button onclick="window.location.reload()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Logout</button>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f'<div class="enterprise-header"><h1 style="margin:0; color:white;">🚀 ARMS Enterprise Workflow</h1><p style="margin:0; opacity:0.9;">Welcome, {st.session_state.user_name} ({st.session_state.user_role.title()})</p></div>', unsafe_allow_html=True)
+    with col2:
+        st.write("")  # Spacer
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.session_state.current_user = None
+            st.session_state.user_role = None
+            st.session_state.user_name = None
+            st.rerun()
     
     # Initialize sample data if empty
     if not st.session_state.tasks:
@@ -538,7 +500,7 @@ def main_app():
     
     # Navigation
     if st.session_state.user_role == "manager":
-        tabs = st.tabs(["📋 Task Management", "📊 Analytics Dashboard", "👥 Team Management", "⚙️ Settings"])
+        tabs = st.tabs(["📋 Task Management", "📊 Analytics Dashboard", "👥 Team Management", "📁 Data Import"])
     else:
         tabs = st.tabs(["📋 My Tasks", "📊 Analytics", "📁 Data Import"])
     
@@ -553,7 +515,7 @@ def main_app():
         col1, col2, col3, col4, col5 = st.columns(5)
         
         total_tasks = len(st.session_state.tasks)
-        my_tasks = len(get_user_tasks(st.session_state.current_user))
+        my_tasks = len(get_user_tasks(st.session_state.user_name))
         available_tasks = len(get_available_tasks())
         completed_tasks = len([t for t in st.session_state.tasks if t["Status"] == "Completed"])
         critical_tasks = len([t for t in st.session_state.tasks if t["Priority"] == "Critical"])
@@ -568,7 +530,7 @@ def main_app():
                     available = get_available_tasks()
                     if available:
                         task = available[0]
-                        update_task_status(task["Task ID"], "In Progress", st.session_state.current_user)
+                        update_task_status(task["Task ID"], "In Progress", st.session_state.user_name)
                         st.success(f"Task #{task['Task ID']} assigned to you!")
                         st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -663,7 +625,7 @@ def main_app():
         filtered_tasks = st.session_state.tasks.copy()
         
         if view_filter == "My Tasks":
-            filtered_tasks = get_user_tasks(st.session_state.current_user)
+            filtered_tasks = get_user_tasks(st.session_state.user_name)
         elif view_filter == "Available Tasks":
             filtered_tasks = get_available_tasks()
         elif view_filter == "Completed":
@@ -699,10 +661,10 @@ def main_app():
                         # Action buttons
                         if task["Status"] == "New" and task["Assigned To"] == "Unassigned":
                             if st.button("Accept", key=f"accept_{task['Task ID']}"):
-                                update_task_status(task["Task ID"], "In Progress", st.session_state.current_user)
+                                update_task_status(task["Task ID"], "In Progress", st.session_state.user_name)
                                 st.rerun()
                                 
-                        elif task["Assigned To"] == st.session_state.current_user:
+                        elif task["Assigned To"] == st.session_state.user_name:
                             if task["Status"] == "In Progress":
                                 col4a, col4b = st.columns(2)
                                 with col4a:
@@ -782,7 +744,7 @@ def main_app():
                 # Column selection
                 st.subheader("Configure Dashboard")
                 available_columns = df.columns.tolist()
-                selected_columns = st.multiselect("Select Columns for Analysis", available_columns, default=available_columns[:5])
+                selected_columns = st.multiselect("Select Columns for Analysis", available_columns, default=available_columns[:min(5, len(available_columns))])
                 
                 if selected_columns:
                     create_analytics_dashboard(df[selected_columns], selected_columns)
@@ -792,7 +754,7 @@ def main_app():
         st.markdown("</div>", unsafe_allow_html=True)
     
     # ======================================
-    # DATA IMPORT TAB (For analysts) / TEAM MANAGEMENT (For managers)
+    # TEAM MANAGEMENT TAB (For managers) / DATA IMPORT (For analysts)
     # ======================================
     with tabs[2]:
         if st.session_state.user_role == "manager":
@@ -843,7 +805,7 @@ def main_app():
                 if st.button("Process Emails", type="primary"):
                     processed = 0
                     for eml_file in eml_files:
-                        task, attachments = process_email_file(eml_file)
+                        task = process_email_file(eml_file)
                         if task:
                             processed += 1
                             st.success(f"Created task #{task['Task ID']} from {eml_file.name}")
@@ -856,6 +818,40 @@ def main_app():
             
             if task_excel:
                 if st.button("Create Tasks from Excel", type="primary"):
+                    tasks_created = process_task_excel(task_excel)
+                    st.success(f"Created {tasks_created} tasks from Excel file!")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    # ======================================
+    # DATA IMPORT TAB (For managers)
+    # ======================================
+    if st.session_state.user_role == "manager" and len(tabs) > 3:
+        with tabs[3]:
+            st.markdown('<div class="enterprise-card">', unsafe_allow_html=True)
+            st.header("📁 Data Import")
+            
+            # Email import
+            st.subheader("📧 Email Import")
+            eml_files = st.file_uploader("Upload .eml files", type=["eml"], accept_multiple_files=True, key="manager_email_import")
+            
+            if eml_files:
+                if st.button("Process Emails", type="primary", key="manager_email_btn"):
+                    processed = 0
+                    for eml_file in eml_files:
+                        task = process_email_file(eml_file)
+                        if task:
+                            processed += 1
+                            st.success(f"Created task #{task['Task ID']} from {eml_file.name}")
+                    
+                    st.success(f"Processed {processed} email(s) successfully!")
+            
+            # Excel task import
+            st.subheader("📊 Excel Task Import")
+            task_excel = st.file_uploader("Upload Excel for task creation", type=["xlsx", "xls"], key="manager_task_excel")
+            
+            if task_excel:
+                if st.button("Create Tasks from Excel", type="primary", key="manager_excel_btn"):
                     tasks_created = process_task_excel(task_excel)
                     st.success(f"Created {tasks_created} tasks from Excel file!")
             
